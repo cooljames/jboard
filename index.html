@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="ko" data-bs-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>JBoard - 모던 커뮤니티 게시판 플랫폼</title>
+    <meta name="description" content="JBoard는 AdminLTE 4 기반의 모던 커뮤니티 게시판 관리 플랫폼입니다." />
+
+    <!-- AdminLTE v4 Theme Init (prevents flash of incorrect theme on load) -->
+    <script>
+      (() => {
+        'use strict';
+        const root = document.documentElement;
+        if (root.getAttribute('data-lte-color-mode') === 'off') return;
+        const STORAGE_KEY = 'lte-theme';
+        let stored = null;
+        try { stored = localStorage.getItem(STORAGE_KEY); } catch {}
+        const authored = root.getAttribute('data-bs-theme');
+        let resolved = 'light';
+        if (stored === 'dark' || stored === 'light') {
+          resolved = stored;
+        } else if (authored === 'dark' || authored === 'light') {
+          resolved = authored;
+        } else if (globalThis.matchMedia('(prefers-color-scheme: dark)').matches) {
+          resolved = 'dark';
+        }
+        root.setAttribute('data-bs-theme', resolved);
+        root.style.colorScheme = resolved;
+      })();
+    </script>
+
+    <!-- Google Fonts: Source Sans 3 & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,300;0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+
+    <!-- ApexCharts (AdminLTE v4 Official Standard) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/apexcharts@3.37.1/dist/apexcharts.css" />
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts@3.37.1/dist/apexcharts.min.js"></script>
+  </head>
+  <body>
+
+    <!-- ══════════════════════════════════════════════════
+         #app — Single root: JS switches between layouts
+         ══════════════════════════════════════════════════ -->
+    <div id="app"></div>
+
+    <!-- ══════════════════════════════════════════════════
+         Modals (shared, always in DOM)
+         ══════════════════════════════════════════════════ -->
+
+    <!-- Write Post Modal -->
+    <div class="modal fade" id="postWriteModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header bg-primary text-white">
+            <h5 class="modal-title fw-bold"><i class="bi bi-pencil-square me-2"></i>새 게시글 작성</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+          <form id="postWriteForm">
+            <div class="modal-body p-4">
+              <div class="row g-3 mb-3">
+                <div class="col-md-4">
+                  <label for="postCategory" class="form-label fw-semibold">분류</label>
+                  <select id="postCategory" class="form-select" required>
+                    <option value="tech">기술</option><option value="notice">공지</option>
+                    <option value="qna">질문</option><option value="free">자유</option><option value="info">정보</option>
+                  </select>
+                </div>
+                <div class="col-md-4">
+                  <label for="postAuthor" class="form-label fw-semibold">작성자</label>
+                  <input type="text" class="form-control" id="postAuthor" value="관리자" required />
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                  <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="postIsNotice" />
+                    <label class="form-check-label fw-semibold text-danger" for="postIsNotice">중요 공지글</label>
+                  </div>
+                </div>
+              </div>
+              <div class="mb-3">
+                <label for="postTitle" class="form-label fw-semibold">제목</label>
+                <input type="text" class="form-control" id="postTitle" placeholder="게시글 제목을 입력하세요" required />
+              </div>
+              <div class="mb-3">
+                <label for="postContent" class="form-label fw-semibold">내용</label>
+                <textarea class="form-control" id="postContent" rows="6" placeholder="게시글 내용을 작성해주세요." required></textarea>
+              </div>
+            </div>
+            <div class="modal-footer bg-body-tertiary">
+              <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">취소</button>
+              <button type="submit" class="btn btn-primary px-4 fw-semibold">게시글 등록</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Detail Post Modal -->
+    <div class="modal fade" id="postDetailModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header border-bottom">
+            <h5 class="modal-title fw-bold" id="detailTitle">게시글 상세</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body p-4">
+            <div id="detailMeta" class="mb-3 pb-2 border-bottom"></div>
+            <div id="detailContent" class="mb-4 text-break lh-lg"></div>
+            <div class="text-center my-4">
+              <button id="detailLikeBtn" class="btn btn-outline-danger px-4 rounded-pill shadow-sm">
+                <i class="bi bi-heart-fill me-1"></i> 추천하기
+              </button>
+            </div>
+            <div class="card bg-body-tertiary border-0 rounded-3 p-3">
+              <h6 class="fw-bold mb-3" id="detailCommentCount">댓글</h6>
+              <div id="commentsList" class="mb-3"></div>
+              <form id="commentAddForm" class="d-flex gap-2">
+                <input type="text" id="commentAuthor" class="form-control form-control-sm" style="max-width:120px;" placeholder="작성자" value="사용자" required />
+                <input type="text" id="commentText" class="form-control form-control-sm" placeholder="댓글을 남겨보세요..." required />
+                <button type="submit" class="btn btn-primary btn-sm px-3">등록</button>
+              </form>
+            </div>
+          </div>
+          <div class="modal-footer border-top bg-body-tertiary">
+            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">닫기</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toastContainer"></div>
+
+    <!-- Scripts -->
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
