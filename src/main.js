@@ -711,7 +711,7 @@ class JBoardApp {
                     <td class="text-center">
                       <div class="btn-group btn-group-sm">
                         <button class="btn btn-outline-primary btn-view" data-id="${p.id}" title="상세보기"><i class="bi bi-eye"></i></button>
-                        <button class="btn btn-outline-danger btn-delete" data-id="${p.id}" title="삭제"><i class="bi bi-trash"></i></button>
+                        ${(this.currentUser && (p.author === this.currentUser.name || this.currentUser.role === 'admin')) ? `<button class="btn btn-outline-danger btn-delete" data-id="${p.id}" title="삭제"><i class="bi bi-trash"></i></button>` : ''}
                       </div>
                     </td>
                   </tr>`).join('')}
@@ -1997,6 +1997,11 @@ class JBoardApp {
   initQuillEditor() {
     const container = document.getElementById('quillEditorContainer');
     if (!container) return;
+
+    // Remove existing Quill toolbars to prevent duplication
+    const oldToolbar = container.parentElement.querySelector('.ql-toolbar');
+    if (oldToolbar) oldToolbar.remove();
+
     container.innerHTML = '';
 
     this.quill = new Quill(container, {
@@ -2166,11 +2171,38 @@ class JBoardApp {
     });
   }
 
-  openPostWriteModal() {
+  openPostWriteModal(editId = null) {
     const authorInput = document.getElementById('postAuthor');
+    const titleInput = document.getElementById('postTitle');
+    const catInput = document.getElementById('postCategory');
+    const noticeInput = document.getElementById('postIsNotice');
+    const form = document.getElementById('postWriteForm');
+    const submitBtn = form.querySelector('button[type="submit"]');
+
     if (authorInput) {
       authorInput.value = this.currentUser ? this.currentUser.name : (authorInput.value || '관리자');
     }
+
+    let editPost = null;
+    if (editId) {
+      editPost = this.posts.find(p => p.id === editId);
+      if (editPost) {
+        form.dataset.editId = editId;
+        submitBtn.innerHTML = '<i class="bi bi-pencil-square me-1"></i>게시글 수정';
+        titleInput.value = editPost.title.replace('📢 ', '');
+        catInput.value = editPost.category;
+        noticeInput.checked = editPost.isNotice;
+        authorInput.value = editPost.author;
+        authorInput.disabled = true;
+      }
+    } else {
+      delete form.dataset.editId;
+      submitBtn.innerHTML = '게시글 등록';
+      titleInput.value = '';
+      noticeInput.checked = false;
+      authorInput.disabled = false;
+    }
+
     const modalEl = document.getElementById('postWriteModal');
     if (!modalEl) return;
 
@@ -2179,7 +2211,10 @@ class JBoardApp {
 
     setTimeout(() => {
       this.initQuillEditor();
-      this.attachedFiles = [];
+      if (this.quill && editPost) {
+        this.quill.root.innerHTML = editPost.content;
+      }
+      this.attachedFiles = editPost && editPost.attachments ? structuredClone(editPost.attachments) : [];
       this.renderAttachedFilesList();
       this.setupDropzone();
     }, 150);
@@ -2221,40 +2256,61 @@ class JBoardApp {
       const finalTitle = notice ? `📢 ${title}` : title;
       const authorEmail = this.currentUser ? this.currentUser.email : 'guest@jboard.local';
 
-      // 2. Call Serverless API (Neon DB or fallback)
-      let newPostData = null;
-      try {
-        const res = await api.createPost({
-          title: finalTitle,
+      const editId = document.getElementById('postWriteForm').dataset.editId;
+
+      if (editId) {
+        const id = parseInt(editId);
+        try {
+          await api.updatePost({ id, title: finalTitle, category: cat, content, attachments: finalAttachments });
+        } catch (apiErr) {
+          console.warn('API update error, using local update:', apiErr);
+        }
+        
+        const idx = this.posts.findIndex(p => p.id === id);
+        if (idx !== -1) {
+          this.posts[idx].title = finalTitle;
+          this.posts[idx].category = cat;
+          this.posts[idx].categoryName = catN;
+          this.posts[idx].content = content;
+          this.posts[idx].attachments = finalAttachments;
+          this.posts[idx].isNotice = notice;
+        }
+      } else {
+        // 2. Call Serverless API (Neon DB or fallback)
+        let newPostData = null;
+        try {
+          const res = await api.createPost({
+            title: finalTitle,
+            category: cat,
+            author,
+            author_email: authorEmail,
+            content,
+            attachments: finalAttachments
+          });
+          if (res.post) newPostData = res.post;
+        } catch (apiErr) {
+          console.warn('API post creation note, using local post:', apiErr);
+        }
+
+        const newId = newPostData ? newPostData.id : (this.posts.length ? Math.max(...this.posts.map(p => p.id)) + 1 : 1);
+        const newPost = {
+          id: newId,
           category: cat,
+          categoryName: catN,
+          title: finalTitle,
           author,
-          author_email: authorEmail,
+          authorAvatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(author)}`,
           content,
-          attachments: finalAttachments
-        });
-        if (res.post) newPostData = res.post;
-      } catch (apiErr) {
-        console.warn('API post creation note, using local post:', apiErr);
+          views: 0,
+          likes: 0,
+          comments: [],
+          attachments: finalAttachments,
+          createdAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
+          isNotice: notice
+        };
+
+        this.posts.unshift(newPost);
       }
-
-      const newId = newPostData ? newPostData.id : (this.posts.length ? Math.max(...this.posts.map(p => p.id)) + 1 : 1);
-      const newPost = {
-        id: newId,
-        category: cat,
-        categoryName: catN,
-        title: finalTitle,
-        author,
-        authorAvatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(author)}`,
-        content,
-        views: 0,
-        likes: 0,
-        comments: [],
-        attachments: finalAttachments,
-        createdAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
-        isNotice: notice
-      };
-
-      this.posts.unshift(newPost);
       this.saveData('jboard_posts', this.posts);
 
       document.getElementById('postWriteForm').reset();
@@ -2386,6 +2442,26 @@ class JBoardApp {
     };
 
     const el = document.getElementById('postDetailModal');
+    const isOwner = this.currentUser && (p.author === this.currentUser.name || this.currentUser.role === 'admin');
+    const ownerActions = document.getElementById('detailOwnerActions');
+    if (ownerActions) {
+      if (isOwner) {
+        ownerActions.classList.remove('d-none');
+        ownerActions.classList.add('d-flex');
+        document.getElementById('detailEditBtn').onclick = () => {
+          (bootstrap.Modal.getInstance(el) || new bootstrap.Modal(el)).hide();
+          this.openPostWriteModal(id);
+        };
+        document.getElementById('detailDeleteBtn').onclick = () => {
+          (bootstrap.Modal.getInstance(el) || new bootstrap.Modal(el)).hide();
+          this.deletePost(id);
+        };
+      } else {
+        ownerActions.classList.remove('d-flex');
+        ownerActions.classList.add('d-none');
+      }
+    }
+
     (bootstrap.Modal.getInstance(el) || new bootstrap.Modal(el)).show();
   }
 
