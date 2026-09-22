@@ -96,27 +96,47 @@ class JBoardApp {
         if (document.getElementById('notifList')) this.refreshNotifications();
       }, 30000);
     }
+
+    // 전역 모달 폼 이벤트 리스너 안전 등록
+    const writeForm = document.getElementById('postWriteForm');
+    if (writeForm) {
+      writeForm.onsubmit = (e) => {
+        e.preventDefault();
+        this.handleCreatePost();
+      };
+    }
   }
 
   async syncWithBackend() {
     try {
       const data = await api.getPosts({ limit: 50 });
       if (data && data.posts && data.posts.length > 0) {
-        this.posts = data.posts.map(p => ({
-          id: p.id,
-          category: p.category,
-          categoryName: this.getCategoryName(p.category),
-          title: p.title,
-          author: p.author,
-          authorAvatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(p.author)}`,
-          content: p.content,
-          views: p.views || 0,
-          likes: p.likes || 0,
-          comments: [],
-          attachments: typeof p.attachments === 'string' ? JSON.parse(p.attachments || '[]') : (p.attachments || []),
-          createdAt: this.formatLocalTime(p.created_at),
-          isNotice: (p.title || '').includes('📢')
-        }));
+        // 서버에서 온 게시글 정규화
+        const serverPosts = data.posts.map(sp => {
+          const localExisting = this.posts.find(lp => lp.id === sp.id);
+          return {
+            id: sp.id,
+            category: sp.category,
+            categoryName: this.getCategoryName(sp.category),
+            title: sp.title,
+            author: sp.author,
+            authorAvatar: localExisting?.authorAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(sp.author || 'user')}`,
+            content: sp.content,
+            views: sp.views || 0,
+            likes: sp.likes || 0,
+            comments: localExisting?.comments || [],
+            attachments: typeof sp.attachments === 'string' ? JSON.parse(sp.attachments || '[]') : (sp.attachments || []),
+            createdAt: this.formatLocalTime(sp.created_at),
+            isNotice: (sp.title || '').includes('📢')
+          };
+        });
+
+        // 로컬에만 있는 게시글(새로 작성한 로컬 글 등) 유실 방지
+        const serverIds = new Set(serverPosts.map(p => p.id));
+        const localOnlyPosts = this.posts.filter(lp => !serverIds.has(lp.id));
+
+        // 최신 순으로 정렬하여 병합
+        this.posts = [...localOnlyPosts, ...serverPosts];
         this.saveData('jboard_posts', this.posts);
         this.refreshCurrentBoard();
         this.refreshNotifications();
@@ -952,7 +972,7 @@ class JBoardApp {
                   </tr>` : filtered.map(p => `
                   <tr class="${p.isNotice ? 'table-warning-subtle' : ''}">
                     <td class="text-center text-muted">${p.id}</td>
-                    <td class="text-center"><span class="badge ${this.badgeClass(p.category)} badge-category">${p.categoryName}</span></td>
+                     <td class="text-center"><span class="badge ${this.badgeClass(p.category)} badge-category">${p.categoryName || this.getCategoryName(p.category)}</span></td>
                     <td>
                       <a href="#" class="post-title-link" data-id="${p.id}">
                         ${p.title}
@@ -2361,6 +2381,14 @@ class JBoardApp {
       }
     });
 
+    // Quill 에디터 내용 변경 시 hidden input(#postContent)에 실시간 동기화
+    this.quill.on('text-change', () => {
+      const hiddenInput = document.getElementById('postContent');
+      if (hiddenInput) {
+        hiddenInput.value = this.quill.root.innerHTML;
+      }
+    });
+
     // Clipboard paste handler for images (e.g. Snipping Tool screenshots or copied web images)
     this.quill.root.addEventListener('paste', async (e) => {
       const clipboardData = e.clipboardData || window.clipboardData;
@@ -2555,8 +2583,14 @@ class JBoardApp {
 
     setTimeout(() => {
       this.initQuillEditor();
-      if (this.quill && editPost) {
-        this.quill.root.innerHTML = editPost.content;
+      if (this.quill) {
+        if (editPost) {
+          this.quill.root.innerHTML = editPost.content || '';
+        } else {
+          this.quill.setContents([]);
+          const hiddenContent = document.getElementById('postContent');
+          if (hiddenContent) hiddenContent.value = '';
+        }
       }
       this.attachedFiles = editPost && editPost.attachments ? structuredClone(editPost.attachments) : [];
       this.renderAttachedFilesList();
@@ -2609,15 +2643,19 @@ class JBoardApp {
         } catch (apiErr) {
           console.warn('API update error, using local update:', apiErr);
         }
-        
+
+        // 로컬 posts 배열 동기화 (모든 필드 최신화)
         const idx = this.posts.findIndex(p => p.id === id);
         if (idx !== -1) {
-          this.posts[idx].title = finalTitle;
-          this.posts[idx].category = cat;
-          this.posts[idx].categoryName = catN;
-          this.posts[idx].content = content;
-          this.posts[idx].attachments = finalAttachments;
-          this.posts[idx].isNotice = notice;
+          this.posts[idx] = {
+            ...this.posts[idx],
+            title: finalTitle,
+            category: cat,
+            categoryName: catN,
+            content,
+            attachments: finalAttachments,
+            isNotice: notice
+          };
         }
       } else {
         // 2. Call Serverless API (Neon DB or fallback)
@@ -2703,8 +2741,19 @@ class JBoardApp {
           };
           this.posts.unshift(p);
         } else {
+          // 기존 로컬 post도 서버 최신 값으로 동기화
           p.views = res.post.views;
           p.likes = res.post.likes;
+          // 서버 응답이 있으면 content/category도 최신화
+          if (res.post.content) p.content = res.post.content;
+          if (res.post.category) {
+            p.category = res.post.category;
+            p.categoryName = p.categoryName || this.getCategoryName(res.post.category);
+          }
+          // authorAvatar가 없으면 생성
+          if (!p.authorAvatar) {
+            p.authorAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(p.author || 'user')}`;
+          }
         }
         p.comments = (res.comments || []).map(c => ({
           author: c.author,
@@ -2712,7 +2761,7 @@ class JBoardApp {
           content: c.content
         }));
         if (res.post.attachments) {
-          p.attachments = typeof res.post.attachments === 'string' ? JSON.parse(res.post.attachments) : res.post.attachments;
+          p.attachments = typeof res.post.attachments === 'string' ? JSON.parse(res.post.attachments || '[]') : (res.post.attachments || []);
         }
       }
     } catch (e) {

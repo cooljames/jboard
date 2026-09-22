@@ -5,7 +5,7 @@ let fallbackPosts = [
   {
     id: 1,
     title: '[공지] JBoard AdminLTE v4 및 Vercel 클라우드 시스템 오픈',
-    category: '공지',
+    category: 'notice',
     author: '관리자',
     author_email: 'admin@jboard.local',
     content: '<p>안녕하세요! <strong>JBoard v4</strong>에 오신 것을 환영합니다.</p><p>Neon Postgres 및 Vercel Blob 스토리지, Quill 리치 텍스트 에디터가 연동된 정통 엔터프라이즈 게시판입니다.</p>',
@@ -18,7 +18,7 @@ let fallbackPosts = [
   {
     id: 2,
     title: 'Vercel Blob과 Neon Postgres를 활용한 모던 아키텍처',
-    category: '기술',
+    category: 'tech',
     author: '일반회원',
     author_email: 'user@jboard.local',
     content: '<p>서버리스 환경에서 빠른 쿼리와 안정적인 이미지 업로드 파이프라인을 구축하는 팁을 공유합니다.</p>',
@@ -31,7 +31,7 @@ let fallbackPosts = [
   {
     id: 3,
     title: 'Quill 에디터에서 스크린샷 이미지 붙여넣기 팁',
-    category: '정보',
+    category: 'info',
     author: '관리자',
     author_email: 'admin@jboard.local',
     content: '<p>에디터 본문에서 캡처한 이미지를 <code>Ctrl + V</code>로 바로 붙여넣으면 고성능 Blob CDN에 실시간 업로드됩니다.</p>',
@@ -219,7 +219,7 @@ export default async function handler(req, res) {
           INSERT INTO posts (title, category, author, author_email, content, attachments)
           VALUES (
             ${title}, 
-            ${category || '자유'}, 
+            ${category || 'free'}, 
             ${author || '익명'}, 
             ${author_email || 'guest@jboard.local'}, 
             ${content}, 
@@ -232,7 +232,7 @@ export default async function handler(req, res) {
         const newPost = {
           id: Date.now(),
           title,
-          category: category || '자유',
+          category: category || 'free',
           author: author || '익명',
           author_email: author_email || 'guest@jboard.local',
           content,
