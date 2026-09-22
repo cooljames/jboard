@@ -114,7 +114,7 @@ class JBoardApp {
           likes: p.likes || 0,
           comments: [],
           attachments: typeof p.attachments === 'string' ? JSON.parse(p.attachments || '[]') : (p.attachments || []),
-          createdAt: (p.created_at || '').replace('T', ' ').substring(0, 16),
+          createdAt: this.formatLocalTime(p.created_at),
           isNotice: (p.title || '').includes('📢')
         }));
         this.saveData('jboard_posts', this.posts);
@@ -132,7 +132,7 @@ class JBoardApp {
         let changed = false;
         for (const u of users) {
           const m = this.members.find(x => x.email === u.email);
-          const lastLogin = (u.last_login || '').replace('T', ' ').substring(0, 16);
+          const lastLogin = this.formatLocalTime(u.last_login);
           if (m) {
             if (lastLogin && m.lastLogin !== lastLogin) {
               m.lastLogin = lastLogin;
@@ -143,7 +143,7 @@ class JBoardApp {
               id: u.id ?? (this.members.length ? Math.max(...this.members.map(x => x.id)) + 1 : 1),
               name: u.name, email: u.email, role: u.role || 'member',
               status: u.status || 'active',
-              joinedAt: (u.created_at || '').substring(0, 10),
+              joinedAt: (this.formatLocalTime(u.created_at) || '').substring(0, 10),
               lastLogin: lastLogin || '-',
               posts: 0,
               avatar: u.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(u.name || u.email)}`
@@ -168,6 +168,15 @@ class JBoardApp {
     const sizes = ['B', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  }
+
+  // 브라우저 로컬 시간대 기준 'YYYY-MM-DD HH:mm' 포맷
+  // (toISOString()는 UTC라 KST에서 9시간 오차 발생 → 사용 금지)
+  formatLocalTime(input) {
+    const d = input instanceof Date ? input : new Date(input);
+    if (!input || isNaN(d.getTime())) return '';
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 
   getCategoryName(cat) {
@@ -268,7 +277,7 @@ class JBoardApp {
         password: await this.hashLocalPassword(password ?? ''),
         role: user.role || 'member',
         avatar: user.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user.name || user.email)}`,
-        createdAt: (user.created_at || new Date().toISOString()).substring(0, 10)
+        createdAt: (this.formatLocalTime(user.created_at) || this.formatLocalTime(new Date())).substring(0, 10)
       });
       this.saveData('jboard_users', this.users);
     }
@@ -276,7 +285,7 @@ class JBoardApp {
       this.members.push({
         id: this.members.length ? Math.max(...this.members.map(m => m.id)) + 1 : 1,
         name: user.name, email: user.email, role: user.role || 'member',
-        status: user.status || 'active', joinedAt: (user.created_at || new Date().toISOString()).substring(0, 10),
+        status: user.status || 'active', joinedAt: (this.formatLocalTime(user.created_at) || this.formatLocalTime(new Date())).substring(0, 10),
         lastLogin: '-', posts: 0,
         avatar: user.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user.name || user.email)}`
       });
@@ -303,7 +312,7 @@ class JBoardApp {
       id: this.users.length ? Math.max(...this.users.map(u=>u.id))+1 : 1,
       name, email, password: await this.hashLocalPassword(password), role:'member',
       avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name)}`,
-      createdAt: new Date().toISOString().split('T')[0]
+      createdAt: this.formatLocalTime(new Date()).substring(0, 10)
     };
     this.users.push(user);
     this.saveData('jboard_users', this.users);
@@ -1415,37 +1424,20 @@ class JBoardApp {
         <!-- Sidebar Navigation -->
         <div class="sidebar-wrapper p-2 d-flex flex-column h-100">
           <nav class="mt-2 flex-grow-1" aria-label="사이드바 메뉴">
-            <ul class="nav sidebar-menu flex-column gap-1" data-lte-toggle="treeview" role="menu">
-              <li class="nav-header text-uppercase text-xs text-muted px-3 py-1">대시보드 & 메뉴</li>
+            <ul class="nav sidebar-menu flex-column" data-lte-toggle="treeview" role="menu">
               ${[
                 {page:'dashboard',icon:'bi-speedometer2',color:'info',label:'통합 대시보드'},
                 {page:'board',icon:'bi-chat-square-text',color:'primary',label:'게시판 관리',badge:'Hot'},
                 {page:'members',icon:'bi-people',color:'success',label:'회원 관리'},
-                {page:'analytics',icon:'bi-graph-up',color:'warning',label:'통계 분석'}
+                {page:'analytics',icon:'bi-graph-up',color:'warning',label:'통계 분석'},
+                {page:'settings',icon:'bi-gear',color:'secondary',label:'환경 설정'}
               ].map(m => `
                 <li class="nav-item">
-                  <a href="#" class="nav-link ${this.adminPage===m.page?'active':''} rounded-3 d-flex align-items-center justify-content-between" data-admin-page="${m.page}">
-                    <div class="d-flex align-items-center gap-2">
-                      <i class="nav-icon bi ${m.icon} text-${m.color}"></i>
-                      <p class="fw-medium mb-0">${m.label}</p>
-                    </div>
-                    <div class="d-flex align-items-center gap-2">
-                      ${m.badge ? `<span class="nav-badge badge bg-danger rounded-pill px-2 py-0 text-xs">${m.badge}</span>` : ''}
-                      <i class="nav-arrow bi bi-chevron-right opacity-50 text-xs"></i>
-                    </div>
+                  <a href="#" class="nav-link ${this.adminPage===m.page?'active':''} rounded-3" data-admin-page="${m.page}">
+                    <i class="nav-icon bi ${m.icon} text-${m.color}"></i>
+                    <p class="fw-medium mb-0">${m.label}${m.badge ? ` <span class="nav-badge badge bg-danger rounded-pill px-2 py-0">${m.badge}</span>` : ''}<i class="nav-arrow bi bi-chevron-right opacity-50"></i></p>
                   </a>
                 </li>`).join('')}
-
-              <li class="nav-header text-uppercase text-xs text-muted px-3 py-1 mt-3">시스템 설정</li>
-              <li class="nav-item">
-                <a href="#" class="nav-link ${this.adminPage==='settings'?'active':''} rounded-3 d-flex align-items-center justify-content-between" data-admin-page="settings">
-                  <div class="d-flex align-items-center gap-2">
-                    <i class="nav-icon bi bi-gear text-secondary"></i>
-                    <p class="fw-medium mb-0">환경 설정</p>
-                  </div>
-                  <i class="nav-arrow bi bi-chevron-right opacity-50 text-xs"></i>
-                </a>
-              </li>
             </ul>
           </nav>
 
@@ -2657,7 +2649,7 @@ class JBoardApp {
           likes: 0,
           comments: [],
           attachments: finalAttachments,
-          createdAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
+          createdAt: this.formatLocalTime(new Date()),
           isNotice: notice
         };
 
@@ -2706,7 +2698,7 @@ class JBoardApp {
             likes: sp.likes || 0,
             comments: [],
             attachments: typeof sp.attachments === 'string' ? JSON.parse(sp.attachments || '[]') : (sp.attachments || []),
-            createdAt: (sp.created_at || '').replace('T', ' ').substring(0, 16),
+            createdAt: this.formatLocalTime(sp.created_at),
             isNotice: (sp.title || '').includes('📢')
           };
           this.posts.unshift(p);
@@ -2716,7 +2708,7 @@ class JBoardApp {
         }
         p.comments = (res.comments || []).map(c => ({
           author: c.author,
-          date: (c.created_at || '').replace('T', ' ').substring(0, 16),
+          date: this.formatLocalTime(c.created_at),
           content: c.content
         }));
         if (res.post.attachments) {
@@ -2813,7 +2805,7 @@ class JBoardApp {
       try {
         await api.addComment({ post_id: id, author: a, author_email: '', content: t });
       } catch {}
-      p.comments.push({ author: a, date: new Date().toISOString().replace('T', ' ').substring(0, 16), content: t });
+      p.comments.push({ author: a, date: this.formatLocalTime(new Date()), content: t });
       this.saveData('jboard_posts', this.posts);
       document.getElementById('commentText').value = '';
       this.refreshCurrentBoard();

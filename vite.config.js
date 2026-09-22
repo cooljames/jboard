@@ -92,6 +92,7 @@ export default defineConfig(({ mode }) => {
     plugins: [vercelApiDevPlugin()],
     server: {
       port: 3000,
+      strictPort: true, // 3000이 사용 중이면 3001 등으로 넘어가지 않고 즉시 에러
       open: false
     }
   };

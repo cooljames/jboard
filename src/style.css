@@ -627,6 +627,58 @@ body {
 }
 
 /* ═══════════════════════════════════════════════════
+   SIDEBAR MENU — 1행 수직 가운데 정렬
+   아이콘 · 텍스트 · 배지 · 화살표 모두 한 줄 중앙 정렬
+   ═══════════════════════════════════════════════════ */
+.sidebar-menu .nav-link {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  flex-wrap: nowrap !important;
+  padding: 0.5rem 0.75rem;
+  min-height: 2.5rem;
+}
+.sidebar-menu .nav-link .nav-icon {
+  flex-shrink: 0;
+  width: 1.6rem;
+  text-align: center;
+  margin-right: 0.5rem;
+  font-size: 1.1rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sidebar-menu .nav-link p {
+  flex: 1 1 0;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  flex-wrap: nowrap !important;
+  margin-bottom: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  min-width: 0;
+  line-height: 1.4;
+}
+.sidebar-menu .nav-link p > .nav-badge {
+  position: static;
+  transform: none;
+  margin-left: 0.4rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.sidebar-menu .nav-link p > .nav-arrow {
+  margin-left: auto;
+  padding-left: 0.5rem;
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+}
+
+/* ═══════════════════════════════════════════════════
    POST DETAIL MODAL — content image fit fix
    Quill HTML이 그대로 들어가는 #detailContent 안의
    큰 이미지가 모달 밖으로 삐져나오지 않게 강제 조정
