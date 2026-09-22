@@ -140,6 +140,19 @@ export const api = {
     return data.user;
   },
 
+  async withdraw(email, password) {
+    const res = await fetch(`${BASE_URL}/auth?action=withdraw`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || '탈퇴 처리에 실패했습니다.');
+    }
+    return data;
+  },
+
   async getUsers() {
     const res = await fetch(`${BASE_URL}/auth?action=users`);
     if (!res.ok) throw new Error('회원 목록 조회 실패');

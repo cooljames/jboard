@@ -58,6 +58,9 @@ class JBoardApp {
       }
     });
 
+    // 기존 평문 저장분을 해시로 업그레이드 (비동기, 백그라운드)
+    this.upgradeLocalPasswordStore();
+
     this.currentUser = this.loadData('jboard_currentUser', null);
     this.currentPage = 'home';
     this.adminPage = 'dashboard';
@@ -86,6 +89,13 @@ class JBoardApp {
 
     // Sync with Neon Postgres backend
     this.syncWithBackend();
+
+    // 알림 주기 갱신 (30초): 상대시간("N분 전") 및 새 항목 반영
+    if (!this.notifTimer) {
+      this.notifTimer = setInterval(() => {
+        if (document.getElementById('notifList')) this.refreshNotifications();
+      }, 30000);
+    }
   }
 
   async syncWithBackend() {
@@ -109,9 +119,46 @@ class JBoardApp {
         }));
         this.saveData('jboard_posts', this.posts);
         this.refreshCurrentBoard();
+        this.refreshNotifications();
       }
     } catch (e) {
       console.warn('[Sync with backend note]:', e.message);
+    }
+
+    // 서버 회원 목록 동기화 (최근 접속 시간 포함)
+    try {
+      const users = await api.getUsers();
+      if (Array.isArray(users)) {
+        let changed = false;
+        for (const u of users) {
+          const m = this.members.find(x => x.email === u.email);
+          const lastLogin = (u.last_login || '').replace('T', ' ').substring(0, 16);
+          if (m) {
+            if (lastLogin && m.lastLogin !== lastLogin) {
+              m.lastLogin = lastLogin;
+              changed = true;
+            }
+          } else {
+            this.members.push({
+              id: u.id ?? (this.members.length ? Math.max(...this.members.map(x => x.id)) + 1 : 1),
+              name: u.name, email: u.email, role: u.role || 'member',
+              status: u.status || 'active',
+              joinedAt: (u.created_at || '').substring(0, 10),
+              lastLogin: lastLogin || '-',
+              posts: 0,
+              avatar: u.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(u.name || u.email)}`
+            });
+            changed = true;
+          }
+        }
+        if (changed) {
+          this.saveData('jboard_members', this.members);
+          this.refreshNotifications();
+          if (this.currentPage === 'admin' && this.adminPage === 'members') this.renderMembers();
+        }
+      }
+    } catch (e) {
+      console.warn('[Sync users note]:', e.message);
     }
   }
 
@@ -172,13 +219,53 @@ class JBoardApp {
   }
 
   // ── Auth (Neon DB 우선, 오프라인 시 로컬 폴백) ──
-  saveLocalUserMirror(user, password) {
+  // 로컬 미러의 패스워드는 평문이 아닌 SHA-256 해시로만 보관
+  async sha256Hex(str) {
+    try {
+      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('jboard-local$' + str));
+      return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+    } catch {
+      return null; // 비보안 컨텍스트 등 subtle 미지원 환경
+    }
+  }
+  async hashLocalPassword(password) {
+    const hex = await this.sha256Hex(password);
+    return hex ? `sha256:${hex}` : `plain:${password}`;
+  }
+  async verifyLocalPassword(inputPw, stored) {
+    if (!stored) return { ok: false, needsRehash: false };
+    if (stored.startsWith('sha256:')) {
+      const hex = await this.sha256Hex(inputPw);
+      return { ok: hex !== null && stored === `sha256:${hex}`, needsRehash: false };
+    }
+    if (stored.startsWith('plain:')) {
+      const ok = inputPw === stored.slice(6);
+      return { ok, needsRehash: ok };
+    }
+    // 레거시 평문 저장분
+    return { ok: inputPw === stored, needsRehash: inputPw === stored };
+  }
+  // 기존 localStorage 평문 저장분을 해시로 일괄 업그레이드
+  upgradeLocalPasswordStore() {
+    (async () => {
+      let changed = false;
+      for (const u of this.users) {
+        if (u.password && !u.password.startsWith('sha256:')) {
+          const raw = u.password.startsWith('plain:') ? u.password.slice(6) : u.password;
+          u.password = await this.hashLocalPassword(raw);
+          changed = true;
+        }
+      }
+      if (changed) this.saveData('jboard_users', this.users);
+    })();
+  }
+  async saveLocalUserMirror(user, password) {
     if (!this.users.some(u => u.email === user.email)) {
       this.users.push({
         id: user.id ?? (this.users.length ? Math.max(...this.users.map(u => u.id)) + 1 : 1),
         name: user.name,
         email: user.email,
-        password: password ?? '',
+        password: await this.hashLocalPassword(password ?? ''),
         role: user.role || 'member',
         avatar: user.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user.name || user.email)}`,
         createdAt: (user.created_at || new Date().toISOString()).substring(0, 10)
@@ -201,7 +288,7 @@ class JBoardApp {
     // 1. Neon DB에 먼저 등록 시도
     try {
       const serverUser = await api.register(name, email, password);
-      this.saveLocalUserMirror(serverUser, password);
+      await this.saveLocalUserMirror(serverUser, password);
       return { ok: true };
     } catch (apiErr) {
       // 이메일 중복은 DB의 확정 응답이므로 그대로 반환 (로컬 저장 금지)
@@ -210,11 +297,11 @@ class JBoardApp {
       }
       console.warn('[Signup API note, using local fallback]:', apiErr.message);
     }
-    // 2. API 도달 불가 시 로컬 폴백 (기존 동작 유지)
+    // 2. API 도달 불가 시 로컬 폴백 (패스워드는 해시로 보관)
     if (this.users.find(u => u.email === email)) return { ok:false, msg:'이미 등록된 이메일입니다.' };
     const user = {
       id: this.users.length ? Math.max(...this.users.map(u=>u.id))+1 : 1,
-      name, email, password, role:'member',
+      name, email, password: await this.hashLocalPassword(password), role:'member',
       avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name)}`,
       createdAt: new Date().toISOString().split('T')[0]
     };
@@ -223,43 +310,135 @@ class JBoardApp {
     // Also add to members list
     this.members.push({ id: this.members.length?Math.max(...this.members.map(m=>m.id))+1:1, name, email, role:'member', status:'active', joinedAt:user.createdAt, lastLogin:'-', posts:0, avatar:user.avatar });
     this.saveData('jboard_members', this.members);
+    this.refreshNotifications();
     return { ok:true };
   }
   async login(email, password) {
     // 1. Neon DB에 먼저 인증 시도
     try {
       const serverUser = await api.login(email, password);
-      this.saveLocalUserMirror(serverUser, password);
+      await this.saveLocalUserMirror(serverUser, password);
       this.currentUser = {
         id: serverUser.id, name: serverUser.name, email: serverUser.email,
         role: serverUser.role, avatar: serverUser.avatar || this.users.find(u => u.email === email)?.avatar
       };
       this.saveData('jboard_currentUser', this.currentUser);
+      this.touchMemberLogin(email);
       return { ok:true, user: this.currentUser };
     } catch (apiErr) {
-      // 확정적 로그인 실패(계정 없음/비번 틀림)는 폴백 없이 그대로 반환
+      // 확정적 로그인 실패(계정 없음/비번 틀림)는 로컬 미러로 폴백 시도
       if (apiErr.message && apiErr.message.includes('이메일 또는 비밀번호')) {
-        const local = this.users.find(u => u.email === email && u.password === password);
-        if (local) {
-          this.currentUser = { id:local.id, name:local.name, email:local.email, role:local.role, avatar:local.avatar };
-          this.saveData('jboard_currentUser', this.currentUser);
-          return { ok:true, user: this.currentUser };
-        }
+        const loginLocal = await this.loginLocal(email, password);
+        if (loginLocal) return { ok:true, user: this.currentUser };
         return { ok:false, msg: apiErr.message };
       }
       console.warn('[Login API note, using local fallback]:', apiErr.message);
     }
-    // 2. API 도달 불가 시 로컬 폴백 (기존 동작 유지)
-    const user = this.users.find(u => u.email === email && u.password === password);
-    if (!user) return { ok:false, msg:'이메일 또는 비밀번호가 올바르지 않습니다.' };
+    // 2. API 도달 불가 시 로컬 폴백
+    const loginLocal = await this.loginLocal(email, password);
+    if (!loginLocal) return { ok:false, msg:'이메일 또는 비밀번호가 올바르지 않습니다.' };
+    return { ok:true, user: this.currentUser };
+  }
+  // 로그인 성공 시 회원 목록의 최근 접속 시간 갱신
+  touchMemberLogin(email) {
+    const m = this.members.find(x => x.email === email);
+    if (m) {
+      const d = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      m.lastLogin = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      this.saveData('jboard_members', this.members);
+    }
+  }
+  // 로컬 미러 인증 (해시 검증 + 레거시 평문 자동 업그레이드)
+  async loginLocal(email, password) {
+    const user = this.users.find(u => u.email === email);
+    if (!user) return false;
+    const { ok, needsRehash } = await this.verifyLocalPassword(password, user.password);
+    if (!ok) return false;
+    if (needsRehash) {
+      user.password = await this.hashLocalPassword(password);
+      this.saveData('jboard_users', this.users);
+    }
     this.currentUser = { id:user.id, name:user.name, email:user.email, role:user.role, avatar:user.avatar };
     this.saveData('jboard_currentUser', this.currentUser);
-    return { ok:true, user: this.currentUser };
+    this.touchMemberLogin(email);
+    return true;
   }
   logout() {
     this.currentUser = null;
     localStorage.removeItem('jboard_currentUser');
     this.showToast('로그아웃 되었습니다.');
+    this.navigate('home');
+  }
+
+  // ── Withdraw (회원 탈퇴) ──
+  openWithdrawModal() {
+    if (!this.currentUser) return;
+    const pwInput = document.getElementById('withdrawPassword');
+    const errEl = document.getElementById('withdrawError');
+    if (pwInput) pwInput.value = '';
+    if (errEl) errEl.classList.add('d-none');
+    const confirmBtn = document.getElementById('withdrawConfirmBtn');
+    if (confirmBtn) confirmBtn.onclick = () => this.handleWithdraw();
+    if (pwInput) {
+      pwInput.onkeydown = (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); this.handleWithdraw(); }
+      };
+    }
+    const modalEl = document.getElementById('withdrawModal');
+    if (modalEl) (bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl)).show();
+  }
+
+  async handleWithdraw() {
+    const email = this.currentUser?.email;
+    if (!email) return;
+    const pwInput = document.getElementById('withdrawPassword');
+    const errEl = document.getElementById('withdrawError');
+    const confirmBtn = document.getElementById('withdrawConfirmBtn');
+    const pw = pwInput?.value || '';
+    const showError = (msg) => {
+      if (errEl) { errEl.textContent = msg; errEl.classList.remove('d-none'); }
+    };
+    if (!pw) { showError('비밀번호를 입력하세요.'); return; }
+    if (confirmBtn) {
+      confirmBtn.disabled = true;
+      confirmBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>처리 중...';
+    }
+
+    try {
+      await api.withdraw(email, pw);
+    } catch (apiErr) {
+      // 서버 확정 거부(비밀번호 불일치)는 그대로 표시
+      if (apiErr.message && (apiErr.message.includes('비밀번호') || apiErr.message.includes('이메일'))) {
+        showError(apiErr.message);
+        if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = '탈퇴하기'; }
+        return;
+      }
+      // 서버 도달 불가 → 로컬 검증 후 로컬 탈퇴
+      console.warn('[Withdraw API note, using local fallback]:', apiErr.message);
+      const local = this.users.find(u => u.email === email);
+      const v = local && await this.verifyLocalPassword(pw, local.password);
+      if (!v || !v.ok) {
+        showError('서버에 연결할 수 없고 비밀번호도 일치하지 않습니다.');
+        if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = '탈퇴하기'; }
+        return;
+      }
+    }
+
+    // 로컬 데이터 정리
+    this.users = this.users.filter(u => u.email !== email);
+    this.members = this.members.filter(m => m.email !== email);
+    this.saveData('jboard_users', this.users);
+    this.saveData('jboard_members', this.members);
+    this.refreshNotifications();
+
+    const modalEl = document.getElementById('withdrawModal');
+    if (modalEl) (bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl)).hide();
+    if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = '탈퇴하기'; }
+
+    this.currentUser = null;
+    localStorage.removeItem('jboard_currentUser');
+    this.showToast('탈퇴 처리되었습니다.', 'warning');
     this.navigate('home');
   }
 
@@ -600,7 +779,16 @@ class JBoardApp {
 
             <!-- Member info & Logout -->
             <div class="d-flex align-items-center gap-2 ms-2">
-              <img src="${this.currentUser.avatar}" class="rounded-circle border" width="30" height="30">
+              <div class="dropdown">
+                <a href="#" data-bs-toggle="dropdown" aria-expanded="false" title="프로필 메뉴">
+                  <img src="${this.currentUser.avatar}" class="rounded-circle border" width="30" height="30" role="button">
+                </a>
+                <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                  <li class="dropdown-header small">${this.currentUser.name}<br><span class="text-body-secondary">${this.currentUser.email}</span></li>
+                  <li><hr class="dropdown-divider"></li>
+                  <li><button type="button" class="dropdown-item text-danger small" id="memberWithdrawBtn"><i class="bi bi-person-x me-2"></i>회원 탈퇴</button></li>
+                </ul>
+              </div>
               <div class="d-none d-md-block text-start">
                 <div class="small fw-bold text-body lh-1">${this.currentUser.name}</div>
                 <span class="badge bg-secondary-subtle text-secondary-emphasis rounded-pill" style="font-size:0.68rem">일반회원</span>
@@ -689,6 +877,7 @@ class JBoardApp {
     this.bindNavLinks();
     this.bindThemeButtons();
     document.getElementById('memberLogoutBtn')?.addEventListener('click', () => this.logout());
+    document.getElementById('memberWithdrawBtn')?.addEventListener('click', () => this.openWithdrawModal());
 
     // Render the board card into #homeBoardContainer
     this.renderBoardTable(document.getElementById('homeBoardContainer'));
@@ -1113,45 +1302,20 @@ class JBoardApp {
 
           <!-- End Navbar Links -->
           <ul class="navbar-nav ms-auto align-items-center gap-1">
-            <!-- Notifications Dropdown -->
-            <li class="nav-item dropdown">
-              <a class="nav-link position-relative py-2 px-2" data-bs-toggle="dropdown" href="#" title="알림 목록">
+            <!-- Notifications Dropdown (실시간 렌더링: refreshNotifications) -->
+            <li class="nav-item dropdown" id="notifDropdownItem">
+              <a class="nav-link position-relative py-2 px-2" data-bs-toggle="dropdown" href="#" title="알림 목록" id="notifBellBtn">
                 <i class="bi bi-bell fs-5"></i>
-                <span class="position-absolute top-1 start-100 translate-middle badge rounded-pill bg-warning text-dark text-xs">
-                  3
+                <span class="position-absolute top-1 start-100 translate-middle badge rounded-pill bg-warning text-dark text-xs" id="notifBadge" style="display:none">
+                  0
                 </span>
               </a>
               <div class="dropdown-menu dropdown-menu-lg dropdown-menu-end shadow-sm">
-                <span class="dropdown-item dropdown-header fw-bold text-center py-2 bg-body-tertiary">
-                  <i class="bi bi-bell-fill me-1 text-warning"></i> 알림 3건
+                <span class="dropdown-item dropdown-header fw-bold text-center py-2 bg-body-tertiary" id="notifHeader">
+                  <i class="bi bi-bell-fill me-1 text-warning"></i> 알림
                 </span>
                 <div class="dropdown-divider m-0"></div>
-                <a href="#" class="dropdown-item d-flex align-items-center gap-3 py-2" data-admin-page="board">
-                  <i class="bi bi-file-earmark-text-fill text-primary fs-5"></i>
-                  <div class="flex-grow-1 text-truncate">
-                    <div class="small fw-semibold">신규 게시글 등록됨</div>
-                    <small class="text-body-secondary text-xs">시스템 정기 점검 안내</small>
-                  </div>
-                  <small class="text-body-secondary text-xs">3분 전</small>
-                </a>
-                <div class="dropdown-divider m-0"></div>
-                <a href="#" class="dropdown-item d-flex align-items-center gap-3 py-2" data-admin-page="members">
-                  <i class="bi bi-person-check-fill text-success fs-5"></i>
-                  <div class="flex-grow-1 text-truncate">
-                    <div class="small fw-semibold">신규 회원 가입</div>
-                    <small class="text-body-secondary text-xs">윤테스트님이 가입했습니다.</small>
-                  </div>
-                  <small class="text-body-secondary text-xs">15분 전</small>
-                </a>
-                <div class="dropdown-divider m-0"></div>
-                <a href="#" class="dropdown-item d-flex align-items-center gap-3 py-2" data-admin-page="analytics">
-                  <i class="bi bi-graph-up-arrow text-info fs-5"></i>
-                  <div class="flex-grow-1 text-truncate">
-                    <div class="small fw-semibold">주간 트렌드 업데이트</div>
-                    <small class="text-body-secondary text-xs">조회수가 15% 상승했습니다.</small>
-                  </div>
-                  <small class="text-body-secondary text-xs">1시간 전</small>
-                </a>
+                <div id="notifList"></div>
                 <div class="dropdown-divider m-0"></div>
                 <a href="#" class="dropdown-item dropdown-footer text-center text-primary small py-2 fw-semibold" data-admin-page="dashboard">
                   대시보드에서 전체 확인
@@ -1224,6 +1388,11 @@ class JBoardApp {
                   </button>
                   <button class="btn btn-outline-danger btn-sm" id="adminLogoutBtn">
                     <i class="bi bi-box-arrow-right me-1"></i>로그아웃
+                  </button>
+                </li>
+                <li class="px-3 pb-2">
+                  <button class="btn btn-link btn-sm text-danger text-decoration-none w-100" id="adminWithdrawBtn">
+                    <i class="bi bi-person-x me-1"></i>회원 탈퇴
                   </button>
                 </li>
               </ul>
@@ -1306,6 +1475,13 @@ class JBoardApp {
     this.bindNavLinks();
     this.bindThemeButtons();
     document.getElementById('adminLogoutBtn')?.addEventListener('click', () => this.logout());
+    document.getElementById('adminWithdrawBtn')?.addEventListener('click', () => this.openWithdrawModal());
+
+    // 알림: 초기 렌더 + 드롭다운 열람 시 읽음 처리
+    this.refreshNotifications();
+    document.getElementById('notifDropdownItem')?.addEventListener('shown.bs.dropdown', () => {
+      setTimeout(() => this.markNotificationsSeen(), 800);
+    });
 
     // Sidebar toggle
     document.querySelectorAll('[data-lte-toggle="sidebar"]').forEach(el => {
@@ -1357,6 +1533,99 @@ class JBoardApp {
       settings: () => this.renderSettings()
     };
     (pages[this.adminPage] || pages.dashboard)();
+  }
+
+  // ═══════════════════════════════════════════════
+  // 실시간 알림 (게시글/댓글/가입 기반 동적 생성)
+  // ═══════════════════════════════════════════════
+  parseNotifTime(str) {
+    if (!str) return 0;
+    const s = String(str).includes('T') ? String(str) : String(str).replace(' ', 'T');
+    const t = new Date(s).getTime();
+    return isNaN(t) ? 0 : t;
+  }
+  timeAgo(ts) {
+    const diff = Date.now() - ts;
+    if (diff < 0) return '방금 전';
+    const m = Math.floor(diff / 60000);
+    if (m < 1) return '방금 전';
+    if (m < 60) return `${m}분 전`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}시간 전`;
+    const d = Math.floor(h / 24);
+    if (d < 7) return `${d}일 전`;
+    const dt = new Date(ts);
+    return `${dt.getMonth() + 1}/${dt.getDate()}`;
+  }
+  buildNotifications() {
+    const items = [];
+    [...this.posts]
+      .sort((a, b) => this.parseNotifTime(b.createdAt) - this.parseNotifTime(a.createdAt))
+      .slice(0, 4)
+      .forEach(p => items.push({
+        icon: 'bi-file-earmark-text-fill text-primary',
+        title: '신규 게시글',
+        desc: p.title,
+        ts: this.parseNotifTime(p.createdAt),
+        page: 'board'
+      }));
+    [...this.members]
+      .sort((a, b) => this.parseNotifTime(b.joinedAt) - this.parseNotifTime(a.joinedAt))
+      .slice(0, 2)
+      .forEach(m => items.push({
+        icon: 'bi-person-check-fill text-success',
+        title: '신규 회원 가입',
+        desc: `${m.name}님이 가입했습니다.`,
+        ts: this.parseNotifTime(m.joinedAt) || Date.now(),
+        page: 'members'
+      }));
+    const comments = [];
+    this.posts.forEach(p => (p.comments || []).forEach(c => comments.push({ post: p, c })));
+    comments
+      .sort((a, b) => this.parseNotifTime(b.c.date) - this.parseNotifTime(a.c.date))
+      .slice(0, 2)
+      .forEach(({ c }) => items.push({
+        icon: 'bi-chat-dots-fill text-info',
+        title: '신규 댓글',
+        desc: `${c.author}: ${c.content}`.substring(0, 60),
+        ts: this.parseNotifTime(c.date),
+        page: 'board'
+      }));
+    return items.filter(n => n.ts > 0).sort((a, b) => b.ts - a.ts).slice(0, 6);
+  }
+  refreshNotifications() {
+    const listEl = document.getElementById('notifList');
+    const badgeEl = document.getElementById('notifBadge');
+    const headerEl = document.getElementById('notifHeader');
+    if (!listEl || !badgeEl) return;
+    const items = this.buildNotifications();
+    const seen = this.loadData('jboard_notif_seen', 0);
+    const unread = items.filter(n => n.ts > seen).length;
+    badgeEl.textContent = unread;
+    badgeEl.style.display = unread > 0 ? '' : 'none';
+    if (headerEl) headerEl.innerHTML = `<i class="bi bi-bell-fill me-1 text-warning"></i> 알림 ${items.length}건`;
+    listEl.innerHTML = items.length ? items.map(n => `
+      <a href="#" class="dropdown-item d-flex align-items-center gap-3 py-2" data-admin-page="${n.page}">
+        <i class="bi ${n.icon} fs-5"></i>
+        <div class="flex-grow-1 text-truncate">
+          <div class="small fw-semibold">${n.title}${n.ts > seen ? ' <span class="badge bg-warning text-dark ms-1" style="font-size:0.6rem">NEW</span>' : ''}</div>
+          <small class="text-body-secondary text-xs">${this.escapeHtml(n.desc)}</small>
+        </div>
+        <small class="text-body-secondary text-xs text-nowrap">${this.timeAgo(n.ts)}</small>
+      </a>`).join('<div class="dropdown-divider m-0"></div>')
+      : '<div class="dropdown-item text-center text-body-secondary small py-3">새 알림이 없습니다.</div>';
+    // 동적 링크 바인딩 (헤더는 1회 바인딩이므로 개별 처리)
+    listEl.querySelectorAll('[data-admin-page]').forEach(el => {
+      el.addEventListener('click', e => {
+        e.preventDefault();
+        this.adminPage = el.getAttribute('data-admin-page');
+        this.renderAdminPage();
+      });
+    });
+  }
+  markNotificationsSeen() {
+    this.saveData('jboard_notif_seen', Date.now());
+    this.refreshNotifications();
   }
 
   get adminContainer() { return document.getElementById('pageContainer'); }
@@ -2403,6 +2672,7 @@ class JBoardApp {
 
       bootstrap.Modal.getInstance(document.getElementById('postWriteModal'))?.hide();
       this.refreshCurrentBoard();
+      this.refreshNotifications();
       this.showToast(editId ? '게시글이 성공적으로 수정되었습니다! ✏️' : '새 글이 성공적으로 등록되었습니다! 🎉', 'success');
     } catch (err) {
       console.error('Post creation error:', err);
@@ -2547,6 +2817,7 @@ class JBoardApp {
       this.saveData('jboard_posts', this.posts);
       document.getElementById('commentText').value = '';
       this.refreshCurrentBoard();
+      this.refreshNotifications();
       this.openDetailModal(id);
       this.showToast('댓글이 등록되었습니다.');
     };

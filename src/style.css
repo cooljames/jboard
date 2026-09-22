@@ -669,6 +669,21 @@ body {
   word-break: break-word;
 }
 
+/* ═══════════════════════════════════════════════════
+   POST WRITE MODAL — responsive sizing
+   데스크톱: modal-xl / lg 이하: 전체화면 + 에디터 확장
+   ═══════════════════════════════════════════════════ */
+@media (min-width: 992px) {
+  #quillEditorContainer {
+    min-height: 300px;
+  }
+}
+@media (max-width: 991.98px) {
+  #quillEditorContainer {
+    min-height: 38vh;
+  }
+}
+
 /* Dark mode overrides for Quill */
 [data-bs-theme="dark"] .ql-toolbar.ql-snow {
   background: #252d37;

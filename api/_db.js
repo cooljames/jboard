@@ -1,4 +1,5 @@
 import { neon } from '@neondatabase/serverless';
+import { hashPassword } from './_password.js';
 
 let sqlClient = null;
 let initialized = false;
@@ -31,9 +32,14 @@ export async function initDb() {
         role VARCHAR(50) DEFAULT 'member',
         avatar TEXT,
         status VARCHAR(50) DEFAULT 'active',
+        last_login TIMESTAMP WITH TIME ZONE,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
     `;
+    // 기존 테이블에 last_login이 없으면 추가 (마이그레이션)
+    await sql`ALTER TABLE jboard_users ADD COLUMN IF NOT EXISTS last_login TIMESTAMP WITH TIME ZONE`;
+    await sql`ALTER TABLE jboard_users ADD COLUMN IF NOT EXISTS avatar TEXT`;
+    await sql`ALTER TABLE jboard_users ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'active'`;
 
     // 2. posts table
     await sql`
@@ -64,14 +70,14 @@ export async function initDb() {
       );
     `;
 
-    // Seed default users if empty
+    // Seed default users if empty (패스워드는 해시로 저장)
     const userCount = await sql`SELECT COUNT(*) as count FROM jboard_users`;
     if (parseInt(userCount[0].count, 10) === 0) {
       await sql`
         INSERT INTO jboard_users (name, email, password, role, status)
-        VALUES 
-          ('관리자', 'admin@jboard.local', 'admin1234', 'admin', 'active'),
-          ('일반회원', 'user@jboard.local', 'user1234', 'member', 'active');
+        VALUES
+          ('관리자', 'admin@jboard.local', ${hashPassword('admin1234')}, 'admin', 'active'),
+          ('일반회원', 'user@jboard.local', ${hashPassword('user1234')}, 'member', 'active');
       `;
     }
 

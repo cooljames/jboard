@@ -1,4 +1,5 @@
 import { getDb, initDb } from './_db.js';
+import { hashPassword, verifyPassword } from './_password.js';
 
 let fallbackUsers = [
   {
@@ -56,18 +57,36 @@ export default async function handler(req, res) {
       }
 
       if (sql) {
-        const rows = await sql`SELECT * FROM jboard_users WHERE email = ${email} AND password = ${password}`;
+        const rows = await sql`SELECT * FROM jboard_users WHERE email = ${email}`;
         if (rows.length === 0) {
           return res.status(401).json({ error: '이메일 또는 비밀번호가 올바르지 않습니다.' });
         }
-        const user = { ...rows[0] };
+        const { ok, needsRehash } = verifyPassword(password, rows[0].password);
+        if (!ok) {
+          return res.status(401).json({ error: '이메일 또는 비밀번호가 올바르지 않습니다.' });
+        }
+        // 레거시 평문 저장분은 로그인 성공 시점에 해시로 자동 마이그레이션
+        if (needsRehash) {
+          await sql`UPDATE jboard_users SET password = ${hashPassword(password)} WHERE id = ${rows[0].id}`;
+        }
+        // 최근 접속 시간 갱신
+        await sql`UPDATE jboard_users SET last_login = NOW() WHERE id = ${rows[0].id}`;
+        const user = { ...rows[0], last_login: new Date().toISOString() };
         delete user.password;
         return res.status(200).json({ success: true, user });
       } else {
-        const user = fallbackUsers.find((u) => u.email === email && u.password === password);
+        const user = fallbackUsers.find((u) => u.email === email);
         if (!user) {
           return res.status(401).json({ error: '이메일 또는 비밀번호가 올바르지 않습니다.' });
         }
+        const { ok, needsRehash } = verifyPassword(password, user.password);
+        if (!ok) {
+          return res.status(401).json({ error: '이메일 또는 비밀번호가 올바르지 않습니다.' });
+        }
+        if (needsRehash) {
+          user.password = hashPassword(password);
+        }
+        user.last_login = new Date().toISOString();
         const userCopy = { ...user };
         delete userCopy.password;
         return res.status(200).json({ success: true, user: userCopy });
@@ -90,7 +109,7 @@ export default async function handler(req, res) {
         }
         const inserted = await sql`
           INSERT INTO jboard_users (name, email, password, role, status)
-          VALUES (${name}, ${email}, ${password}, 'member', 'active')
+          VALUES (${name}, ${email}, ${hashPassword(password)}, 'member', 'active')
           RETURNING id, name, email, role, status, created_at
         `;
         return res.status(201).json({ success: true, user: inserted[0] });
@@ -103,7 +122,7 @@ export default async function handler(req, res) {
           id: Date.now(),
           name,
           email,
-          password,
+          password: hashPassword(password),
           role: 'member',
           status: 'active',
           created_at: new Date().toISOString()
@@ -116,11 +135,45 @@ export default async function handler(req, res) {
     }
 
     // ----------------------------------------------------
+    // WITHDRAW (회원 탈퇴: 본인 이메일 + 비밀번호 확인 후 삭제)
+    // ----------------------------------------------------
+    if (action === 'withdraw' && method === 'POST') {
+      const { email, password } = body || {};
+      if (!email || !password) {
+        return res.status(400).json({ error: 'Email and password are required' });
+      }
+
+      if (sql) {
+        const rows = await sql`SELECT * FROM jboard_users WHERE email = ${email}`;
+        if (rows.length === 0) {
+          return res.status(401).json({ error: '비밀번호가 일치하지 않습니다.' });
+        }
+        const { ok } = verifyPassword(password, rows[0].password);
+        if (!ok) {
+          return res.status(401).json({ error: '비밀번호가 일치하지 않습니다.' });
+        }
+        await sql`DELETE FROM jboard_users WHERE email = ${email}`;
+        return res.status(200).json({ success: true, message: 'Withdrawn' });
+      } else {
+        const idx = fallbackUsers.findIndex((u) => u.email === email);
+        if (idx === -1) {
+          return res.status(401).json({ error: '비밀번호가 일치하지 않습니다.' });
+        }
+        const { ok } = verifyPassword(password, fallbackUsers[idx].password);
+        if (!ok) {
+          return res.status(401).json({ error: '비밀번호가 일치하지 않습니다.' });
+        }
+        fallbackUsers.splice(idx, 1);
+        return res.status(200).json({ success: true, message: 'Withdrawn' });
+      }
+    }
+
+    // ----------------------------------------------------
     // LIST USERS (Admin)
     // ----------------------------------------------------
     if (action === 'users' && method === 'GET') {
       if (sql) {
-        const users = await sql`SELECT id, name, email, role, status, created_at FROM jboard_users ORDER BY created_at DESC`;
+        const users = await sql`SELECT id, name, email, role, status, avatar, last_login, created_at FROM jboard_users ORDER BY created_at DESC`;
         return res.status(200).json({ users });
       } else {
         const users = fallbackUsers.map((u) => {
