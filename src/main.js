@@ -171,8 +171,46 @@ class JBoardApp {
     });
   }
 
-  // ── Auth ──
-  signup(name, email, password) {
+  // ── Auth (Neon DB 우선, 오프라인 시 로컬 폴백) ──
+  saveLocalUserMirror(user, password) {
+    if (!this.users.some(u => u.email === user.email)) {
+      this.users.push({
+        id: user.id ?? (this.users.length ? Math.max(...this.users.map(u => u.id)) + 1 : 1),
+        name: user.name,
+        email: user.email,
+        password: password ?? '',
+        role: user.role || 'member',
+        avatar: user.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user.name || user.email)}`,
+        createdAt: (user.created_at || new Date().toISOString()).substring(0, 10)
+      });
+      this.saveData('jboard_users', this.users);
+    }
+    if (!this.members.some(m => m.email === user.email)) {
+      this.members.push({
+        id: this.members.length ? Math.max(...this.members.map(m => m.id)) + 1 : 1,
+        name: user.name, email: user.email, role: user.role || 'member',
+        status: user.status || 'active', joinedAt: (user.created_at || new Date().toISOString()).substring(0, 10),
+        lastLogin: '-', posts: 0,
+        avatar: user.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user.name || user.email)}`
+      });
+      this.saveData('jboard_members', this.members);
+    }
+  }
+
+  async signup(name, email, password) {
+    // 1. Neon DB에 먼저 등록 시도
+    try {
+      const serverUser = await api.register(name, email, password);
+      this.saveLocalUserMirror(serverUser, password);
+      return { ok: true };
+    } catch (apiErr) {
+      // 이메일 중복은 DB의 확정 응답이므로 그대로 반환 (로컬 저장 금지)
+      if (apiErr.message && apiErr.message.includes('이미 존재하는 이메일')) {
+        return { ok: false, msg: apiErr.message };
+      }
+      console.warn('[Signup API note, using local fallback]:', apiErr.message);
+    }
+    // 2. API 도달 불가 시 로컬 폴백 (기존 동작 유지)
     if (this.users.find(u => u.email === email)) return { ok:false, msg:'이미 등록된 이메일입니다.' };
     const user = {
       id: this.users.length ? Math.max(...this.users.map(u=>u.id))+1 : 1,
@@ -187,7 +225,31 @@ class JBoardApp {
     this.saveData('jboard_members', this.members);
     return { ok:true };
   }
-  login(email, password) {
+  async login(email, password) {
+    // 1. Neon DB에 먼저 인증 시도
+    try {
+      const serverUser = await api.login(email, password);
+      this.saveLocalUserMirror(serverUser, password);
+      this.currentUser = {
+        id: serverUser.id, name: serverUser.name, email: serverUser.email,
+        role: serverUser.role, avatar: serverUser.avatar || this.users.find(u => u.email === email)?.avatar
+      };
+      this.saveData('jboard_currentUser', this.currentUser);
+      return { ok:true, user: this.currentUser };
+    } catch (apiErr) {
+      // 확정적 로그인 실패(계정 없음/비번 틀림)는 폴백 없이 그대로 반환
+      if (apiErr.message && apiErr.message.includes('이메일 또는 비밀번호')) {
+        const local = this.users.find(u => u.email === email && u.password === password);
+        if (local) {
+          this.currentUser = { id:local.id, name:local.name, email:local.email, role:local.role, avatar:local.avatar };
+          this.saveData('jboard_currentUser', this.currentUser);
+          return { ok:true, user: this.currentUser };
+        }
+        return { ok:false, msg: apiErr.message };
+      }
+      console.warn('[Login API note, using local fallback]:', apiErr.message);
+    }
+    // 2. API 도달 불가 시 로컬 폴백 (기존 동작 유지)
     const user = this.users.find(u => u.email === email && u.password === password);
     if (!user) return { ok:false, msg:'이메일 또는 비밀번호가 올바르지 않습니다.' };
     this.currentUser = { id:user.id, name:user.name, email:user.email, role:user.role, avatar:user.avatar };
@@ -877,11 +939,20 @@ class JBoardApp {
       icon.className = inp.type === 'password' ? 'bi bi-eye' : 'bi bi-eye-slash';
     });
 
-    document.getElementById('loginForm').addEventListener('submit', e => {
+    document.getElementById('loginForm').addEventListener('submit', async e => {
       e.preventDefault();
       const email = document.getElementById('loginEmail').value.trim();
       const pw = document.getElementById('loginPassword').value;
-      const result = this.login(email, pw);
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>로그인 중...';
+      }
+      const result = await this.login(email, pw);
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="bi bi-box-arrow-in-right me-1"></i>로그인';
+      }
       if (result.ok) {
         this.showToast(`${this.currentUser.name}님, 환영합니다! 🎉`, 'success');
         if (this.currentUser.role === 'admin') {
@@ -975,7 +1046,7 @@ class JBoardApp {
       icon.className = inp.type === 'password' ? 'bi bi-eye' : 'bi bi-eye-slash';
     });
 
-    document.getElementById('signupForm').addEventListener('submit', e => {
+    document.getElementById('signupForm').addEventListener('submit', async e => {
       e.preventDefault();
       const name = document.getElementById('signupName').value.trim();
       const email = document.getElementById('signupEmail').value.trim();
@@ -989,7 +1060,16 @@ class JBoardApp {
       if (pw !== pw2) { errEl.textContent = '비밀번호가 일치하지 않습니다.'; errEl.classList.remove('d-none'); return; }
       if (pw.length < 4) { errEl.textContent = '비밀번호는 4자 이상이어야 합니다.'; errEl.classList.remove('d-none'); return; }
 
-      const result = this.signup(name, email, pw);
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>가입 처리 중...';
+      }
+      const result = await this.signup(name, email, pw);
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="bi bi-person-plus-fill me-1"></i>회원가입';
+      }
       if (!result.ok) { errEl.textContent = result.msg; errEl.classList.remove('d-none'); return; }
 
       sucEl.textContent = '🎉 회원가입이 완료되었습니다! 로그인 페이지로 이동합니다...';
@@ -2083,28 +2163,31 @@ class JBoardApp {
       fileInput.value = '';
     };
 
-    ['dragenter', 'dragover'].forEach(eventName => {
-      dropzone.addEventListener(eventName, (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        dropzone.classList.add('drag-over');
-      });
-    });
-
-    ['dragleave', 'drop'].forEach(eventName => {
-      dropzone.addEventListener(eventName, (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        dropzone.classList.remove('drag-over');
-      });
-    });
-
-    dropzone.addEventListener('drop', (e) => {
+    // NOTE: onxxx 프로퍼티로 바인딩 — 모달을 반복해서 열어도 리스너가 누적되지 않음
+    dropzone.ondragenter = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.classList.add('drag-over');
+    };
+    dropzone.ondragover = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.classList.add('drag-over');
+    };
+    dropzone.ondragleave = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.classList.remove('drag-over');
+    };
+    dropzone.ondrop = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.classList.remove('drag-over');
       const files = Array.from(e.dataTransfer.files);
       if (files.length > 0) {
         this.addFilesToQueue(files);
       }
-    });
+    };
   }
 
   addFilesToQueue(files) {
@@ -2320,14 +2403,15 @@ class JBoardApp {
 
       bootstrap.Modal.getInstance(document.getElementById('postWriteModal'))?.hide();
       this.refreshCurrentBoard();
-      this.showToast('새 글이 성공적으로 등록되었습니다! 🎉', 'success');
+      this.showToast(editId ? '게시글이 성공적으로 수정되었습니다! ✏️' : '새 글이 성공적으로 등록되었습니다! 🎉', 'success');
     } catch (err) {
       console.error('Post creation error:', err);
       this.showToast(err.message || '게시글 등록 중 오류가 발생했습니다.', 'danger');
     } finally {
       if (submitBtn) {
         submitBtn.disabled = false;
-        submitBtn.innerHTML = '게시글 등록';
+        const isEditMode = !!document.getElementById('postWriteForm').dataset.editId;
+        submitBtn.innerHTML = isEditMode ? '<i class="bi bi-pencil-square me-1"></i>게시글 수정' : '게시글 등록';
       }
     }
   }
@@ -2337,8 +2421,29 @@ class JBoardApp {
     try {
       const res = await api.getPost(id);
       if (res.post) {
-        p.views = res.post.views;
-        p.likes = res.post.likes;
+        if (!p) {
+          // 로컬 목록에 없는 글(서버에만 존재) — 서버 응답을 로컬 형태로 정규화
+          const sp = res.post;
+          p = {
+            id: sp.id,
+            category: sp.category,
+            categoryName: this.getCategoryName(sp.category),
+            title: sp.title,
+            author: sp.author,
+            authorAvatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(sp.author || 'user')}`,
+            content: sp.content || '',
+            views: sp.views || 0,
+            likes: sp.likes || 0,
+            comments: [],
+            attachments: typeof sp.attachments === 'string' ? JSON.parse(sp.attachments || '[]') : (sp.attachments || []),
+            createdAt: (sp.created_at || '').replace('T', ' ').substring(0, 16),
+            isNotice: (sp.title || '').includes('📢')
+          };
+          this.posts.unshift(p);
+        } else {
+          p.views = res.post.views;
+          p.likes = res.post.likes;
+        }
         p.comments = (res.comments || []).map(c => ({
           author: c.author,
           date: (c.created_at || '').replace('T', ' ').substring(0, 16),
@@ -2349,7 +2454,12 @@ class JBoardApp {
         }
       }
     } catch (e) {
-      p.views = (p.views || 0) + 1;
+      if (p) p.views = (p.views || 0) + 1;
+    }
+
+    if (!p) {
+      this.showToast('게시글을 찾을 수 없습니다.', 'danger');
+      return;
     }
 
     this.saveData('jboard_posts', this.posts);

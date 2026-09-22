@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import postsHandler from './api/posts.js';
 import uploadHandler from './api/upload.js';
 import authHandler from './api/auth.js';
@@ -67,10 +67,32 @@ function vercelApiDevPlugin() {
   };
 }
 
-export default defineConfig({
-  plugins: [vercelApiDevPlugin()],
-  server: {
-    port: 3000,
-    open: false
+export default defineConfig(({ mode }) => {
+  // .env / .env.local 파일 로드 → 로컬 dev 서버의 API 핸들러(Neon, Blob)가
+  // process.env.DATABASE_URL / BLOB_READ_WRITE_TOKEN을 읽을 수 있게 주입.
+  // (VITE_ 접두사가 없으므로 클라이언트 번들에는 노출되지 않음)
+  const env = loadEnv(mode, process.cwd(), '');
+  for (const key of ['DATABASE_URL', 'BLOB_READ_WRITE_TOKEN', 'JWT_SECRET']) {
+    if (!process.env[key] && env[key]) {
+      process.env[key] = env[key];
+    }
   }
+  if (process.env.DATABASE_URL) {
+    console.log('[JBoard dev] DATABASE_URL loaded — Neon Postgres mode');
+  } else {
+    console.log('[JBoard dev] DATABASE_URL not set — in-memory fallback mode');
+  }
+  if (process.env.BLOB_READ_WRITE_TOKEN) {
+    console.log('[JBoard dev] BLOB_READ_WRITE_TOKEN loaded — Vercel Blob mode');
+  } else {
+    console.log('[JBoard dev] BLOB_READ_WRITE_TOKEN not set — DataURL fallback mode');
+  }
+
+  return {
+    plugins: [vercelApiDevPlugin()],
+    server: {
+      port: 3000,
+      open: false
+    }
+  };
 });

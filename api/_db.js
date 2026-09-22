@@ -21,9 +21,9 @@ export async function initDb() {
   }
 
   try {
-    // 1. users table
+    // 1. users table (jboard_ prefix: Neon DB를 타 프로젝트와 공유하므로 충돌 방지)
     await sql`
-      CREATE TABLE IF NOT EXISTS users (
+      CREATE TABLE IF NOT EXISTS jboard_users (
         id SERIAL PRIMARY KEY,
         name VARCHAR(100) NOT NULL,
         email VARCHAR(255) UNIQUE NOT NULL,
@@ -65,10 +65,10 @@ export async function initDb() {
     `;
 
     // Seed default users if empty
-    const userCount = await sql`SELECT COUNT(*) as count FROM users`;
+    const userCount = await sql`SELECT COUNT(*) as count FROM jboard_users`;
     if (parseInt(userCount[0].count, 10) === 0) {
       await sql`
-        INSERT INTO users (name, email, password, role, status)
+        INSERT INTO jboard_users (name, email, password, role, status)
         VALUES 
           ('관리자', 'admin@jboard.local', 'admin1234', 'admin', 'active'),
           ('일반회원', 'user@jboard.local', 'user1234', 'member', 'active');

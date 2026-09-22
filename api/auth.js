@@ -56,7 +56,7 @@ export default async function handler(req, res) {
       }
 
       if (sql) {
-        const rows = await sql`SELECT * FROM users WHERE email = ${email} AND password = ${password}`;
+        const rows = await sql`SELECT * FROM jboard_users WHERE email = ${email} AND password = ${password}`;
         if (rows.length === 0) {
           return res.status(401).json({ error: '이메일 또는 비밀번호가 올바르지 않습니다.' });
         }
@@ -84,12 +84,12 @@ export default async function handler(req, res) {
       }
 
       if (sql) {
-        const existing = await sql`SELECT id FROM users WHERE email = ${email}`;
+        const existing = await sql`SELECT id FROM jboard_users WHERE email = ${email}`;
         if (existing.length > 0) {
           return res.status(409).json({ error: '이미 존재하는 이메일 계정입니다.' });
         }
         const inserted = await sql`
-          INSERT INTO users (name, email, password, role, status)
+          INSERT INTO jboard_users (name, email, password, role, status)
           VALUES (${name}, ${email}, ${password}, 'member', 'active')
           RETURNING id, name, email, role, status, created_at
         `;
@@ -120,7 +120,7 @@ export default async function handler(req, res) {
     // ----------------------------------------------------
     if (action === 'users' && method === 'GET') {
       if (sql) {
-        const users = await sql`SELECT id, name, email, role, status, created_at FROM users ORDER BY created_at DESC`;
+        const users = await sql`SELECT id, name, email, role, status, created_at FROM jboard_users ORDER BY created_at DESC`;
         return res.status(200).json({ users });
       } else {
         const users = fallbackUsers.map((u) => {

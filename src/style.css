@@ -619,11 +619,54 @@ body {
   font-style: normal;
 }
 .ql-editor img {
-  max-width: 100%;
-  height: auto;
+  max-width: 100% !important;
+  height: auto !important;
   border-radius: 8px;
   margin: 10px 0;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* ═══════════════════════════════════════════════════
+   POST DETAIL MODAL — content image fit fix
+   Quill HTML이 그대로 들어가는 #detailContent 안의
+   큰 이미지가 모달 밖으로 삐져나오지 않게 강제 조정
+   ═══════════════════════════════════════════════════ */
+#postDetailModal .modal-body {
+  overflow-x: hidden;
+}
+#detailContent {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  min-width: 0;
+}
+#detailContent img {
+  max-width: 100% !important;
+  height: auto !important;
+  width: auto !important;
+  display: block;
+  margin: 0.75rem auto;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  object-fit: contain;
+}
+#detailContent video,
+#detailContent iframe {
+  max-width: 100% !important;
+  height: auto;
+  display: block;
+  margin: 0.75rem auto;
+  border-radius: 8px;
+}
+#detailContent table {
+  max-width: 100% !important;
+  width: 100% !important;
+  display: block;
+  overflow-x: auto;
+}
+#detailContent pre {
+  max-width: 100%;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 /* Dark mode overrides for Quill */

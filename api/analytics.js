@@ -21,7 +21,7 @@ export default async function handler(req, res) {
         SELECT COUNT(*) as count FROM posts 
         WHERE created_at >= CURRENT_DATE
       `;
-      const totalUsersRow = await sql`SELECT COUNT(*) as count FROM users`;
+      const totalUsersRow = await sql`SELECT COUNT(*) as count FROM jboard_users`;
 
       const categoryRows = await sql`
         SELECT category, COUNT(*) as count FROM posts GROUP BY category
