@@ -592,3 +592,133 @@ body {
   .hero-cta { width: 100%; justify-content: center; }
   .auth-card { padding: 2rem 1.5rem; }
 }
+
+/* ═══════════════════════════════════════════════════
+   QUILL.JS RICH TEXT EDITOR STYLING
+   ═══════════════════════════════════════════════════ */
+.ql-toolbar.ql-snow {
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+  border-color: var(--bs-border-color);
+  background: var(--bs-tertiary-bg);
+}
+.ql-container.ql-snow {
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
+  border-color: var(--bs-border-color);
+  font-family: inherit;
+  font-size: 0.95rem;
+  min-height: 200px;
+}
+.ql-editor {
+  min-height: 180px;
+  line-height: 1.7;
+}
+.ql-editor.ql-blank::before {
+  color: var(--bs-secondary-color);
+  font-style: normal;
+}
+.ql-editor img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 10px 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* Dark mode overrides for Quill */
+[data-bs-theme="dark"] .ql-toolbar.ql-snow {
+  background: #252d37;
+  border-color: #374151;
+}
+[data-bs-theme="dark"] .ql-container.ql-snow {
+  background: #1e2530;
+  border-color: #374151;
+  color: #e5e7eb;
+}
+[data-bs-theme="dark"] .ql-snow .ql-stroke {
+  stroke: #9ca3af;
+}
+[data-bs-theme="dark"] .ql-snow .ql-fill {
+  fill: #9ca3af;
+}
+[data-bs-theme="dark"] .ql-snow .ql-picker {
+  color: #9ca3af;
+}
+[data-bs-theme="dark"] .ql-snow .ql-picker-options {
+  background-color: #252d37;
+  border-color: #374151;
+}
+
+/* ═══════════════════════════════════════════════════
+   MULTI-FILE DRAG & DROP DROPZONE STYLING
+   ═══════════════════════════════════════════════════ */
+.dropzone-area {
+  background: var(--bs-tertiary-bg);
+  border-color: var(--bs-border-color) !important;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+.dropzone-area:hover {
+  background: var(--bs-secondary-bg);
+  border-color: var(--bs-primary) !important;
+}
+.dropzone-area.drag-over {
+  background: rgba(13, 110, 253, 0.08) !important;
+  border-color: var(--bs-primary) !important;
+  transform: scale(1.01);
+}
+
+/* Attached file item card */
+.attached-file-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.85rem;
+  background: var(--bs-tertiary-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: 8px;
+  font-size: 0.875rem;
+  transition: background 0.15s ease;
+}
+.attached-file-item:hover {
+  background: var(--bs-secondary-bg);
+}
+.attached-file-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.attached-file-name {
+  font-weight: 500;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Detail view attachment badge */
+.detail-attachment-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.85rem;
+  background: var(--bs-body-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: var(--bs-body-color);
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+.detail-attachment-badge:hover {
+  background: var(--bs-primary);
+  color: #fff;
+  border-color: var(--bs-primary);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(13, 110, 253, 0.2);
+}
+

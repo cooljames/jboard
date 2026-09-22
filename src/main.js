@@ -7,8 +7,11 @@ import 'bootstrap-icons/font/bootstrap-icons.css';
 import 'admin-lte/dist/css/adminlte.min.css';
 import * as bootstrap from 'bootstrap';
 import './style.css';
+import Quill from 'quill';
+import { api } from './api.js';
 
 window.bootstrap = bootstrap;
+window.Quill = Quill;
 
 // ─────────────────────────────────────────────────
 // Mock Data
@@ -61,6 +64,8 @@ class JBoardApp {
     this.boardCategory = 'all';
     this.boardSearch = '';
     this.charts = {};
+    this.attachedFiles = [];
+    this.quill = null;
 
     this.initTheme();
 
@@ -78,6 +83,59 @@ class JBoardApp {
       const nav = document.querySelector('.pub-navbar');
       if (nav) nav.classList.toggle('scrolled', window.scrollY > 20);
     });
+
+    // Sync with Neon Postgres backend
+    this.syncWithBackend();
+  }
+
+  async syncWithBackend() {
+    try {
+      const data = await api.getPosts({ limit: 50 });
+      if (data && data.posts && data.posts.length > 0) {
+        this.posts = data.posts.map(p => ({
+          id: p.id,
+          category: p.category,
+          categoryName: this.getCategoryName(p.category),
+          title: p.title,
+          author: p.author,
+          authorAvatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(p.author)}`,
+          content: p.content,
+          views: p.views || 0,
+          likes: p.likes || 0,
+          comments: [],
+          attachments: typeof p.attachments === 'string' ? JSON.parse(p.attachments || '[]') : (p.attachments || []),
+          createdAt: (p.created_at || '').replace('T', ' ').substring(0, 16),
+          isNotice: (p.title || '').includes('📢')
+        }));
+        this.saveData('jboard_posts', this.posts);
+        this.refreshCurrentBoard();
+      }
+    } catch (e) {
+      console.warn('[Sync with backend note]:', e.message);
+    }
+  }
+
+  formatFileSize(bytes) {
+    if (!bytes || bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  }
+
+  getCategoryName(cat) {
+    const map = { tech: '기술', notice: '공지', qna: '질문', free: '자유', info: '정보', '기술': '기술', '공지': '공지', '질문': '질문', '자유': '자유', '정보': '정보' };
+    return map[cat] || cat || '자유';
+  }
+
+  escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   }
 
   // ── Data ──
@@ -639,6 +697,7 @@ class JBoardApp {
                       <a href="#" class="post-title-link" data-id="${p.id}">
                         ${p.title}
                         ${p.comments?.length ? `<span class="badge bg-secondary-subtle text-secondary-emphasis rounded-pill ms-1">[${p.comments.length}]</span>` : ''}
+                        ${p.attachments?.length ? `<span class="badge bg-info-subtle text-info-emphasis rounded-pill ms-1" title="첨부파일 ${p.attachments.length}개"><i class="bi bi-paperclip me-1"></i>${p.attachments.length}</span>` : ''}
                       </a>
                     </td>
                     <td>
@@ -692,12 +751,7 @@ class JBoardApp {
 
     // Write button
     container.querySelector('#openWriteModalBtn')?.addEventListener('click', () => {
-      const authorInput = document.getElementById('postAuthor');
-      if (authorInput) {
-        authorInput.value = this.currentUser ? this.currentUser.name : (authorInput.value || '방문자');
-      }
-      const modalEl = document.getElementById('postWriteModal');
-      if (modalEl) (bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl)).show();
+      this.openPostWriteModal();
     });
 
     // Post detail & delete
@@ -1197,10 +1251,7 @@ class JBoardApp {
     // Header Quick Write button
     document.getElementById('adminHeaderWriteBtn')?.addEventListener('click', (e) => {
       e.preventDefault();
-      const authorInput = document.getElementById('postAuthor');
-      if (authorInput) authorInput.value = this.currentUser ? this.currentUser.name : '관리자';
-      const modalEl = document.getElementById('postWriteModal');
-      if (modalEl) (bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl)).show();
+      this.openPostWriteModal();
     });
 
     // Sidebar menu navigation
@@ -1941,38 +1992,414 @@ class JBoardApp {
   }
 
   // ═══════════════════════════════════════════════
-  // POST CRUD
+  // QUILL & DROPZONE & POST CRUD
   // ═══════════════════════════════════════════════
-  handleCreatePost() {
-    const title=document.getElementById('postTitle').value.trim(), author=document.getElementById('postAuthor').value.trim();
-    const cat=document.getElementById('postCategory').value, catN=document.getElementById('postCategory').selectedOptions[0].text;
-    const content=document.getElementById('postContent').value.trim(), notice=document.getElementById('postIsNotice').checked;
-    if(!title||!author||!content){alert('모든 항목을 입력하세요.');return;}
-    this.posts.unshift({id:this.posts.length?Math.max(...this.posts.map(p=>p.id))+1:1,category:cat,categoryName:catN,title:notice?`📢 ${title}`:title,author,authorAvatar:`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(author)}`,content,views:0,likes:0,comments:[],createdAt:new Date().toISOString().replace('T',' ').substring(0,16),isNotice:notice});
-    this.saveData('jboard_posts',this.posts);
-    document.getElementById('postWriteForm').reset();
-    bootstrap.Modal.getInstance(document.getElementById('postWriteModal'))?.hide();
-    this.refreshCurrentBoard();
-    this.showToast('새 글 등록 완료!','success');
+  initQuillEditor() {
+    const container = document.getElementById('quillEditorContainer');
+    if (!container) return;
+    container.innerHTML = '';
+
+    this.quill = new Quill(container, {
+      theme: 'snow',
+      placeholder: '게시글 내용을 자유롭게 작성하세요. (스크린샷이나 이미지를 Ctrl+V로 붙여넣을 수 있습니다)',
+      modules: {
+        toolbar: [
+          [{ header: [1, 2, 3, false] }],
+          ['bold', 'italic', 'underline', 'strike'],
+          ['blockquote', 'code-block'],
+          [{ list: 'ordered' }, { list: 'bullet' }],
+          [{ color: [] }, { background: [] }],
+          ['link', 'image'],
+          ['clean']
+        ]
+      }
+    });
+
+    // Clipboard paste handler for images (e.g. Snipping Tool screenshots or copied web images)
+    this.quill.root.addEventListener('paste', async (e) => {
+      const clipboardData = e.clipboardData || window.clipboardData;
+      if (!clipboardData || !clipboardData.items) return;
+
+      for (const item of clipboardData.items) {
+        if (item.type.indexOf('image') !== -1) {
+          e.preventDefault();
+          const file = item.getAsFile();
+          if (file) {
+            this.showToast('클립보드 이미지를 업로드하고 있습니다... ⏳', 'info');
+            try {
+              const uploaded = await api.uploadFile(file);
+              const range = this.quill.getSelection(true) || { index: this.quill.getLength() };
+              this.quill.insertEmbed(range.index, 'image', uploaded.url);
+              this.quill.setSelection(range.index + 1);
+              this.showToast('이미지가 본문에 성공적으로 삽입되었습니다! 🖼️', 'success');
+            } catch (err) {
+              console.error('Image paste upload error:', err);
+              this.showToast('이미지 업로드에 실패했습니다.', 'danger');
+            }
+          }
+        }
+      }
+    });
+
+    // Custom toolbar image button handler
+    const toolbar = this.quill.getModule('toolbar');
+    toolbar.addHandler('image', () => {
+      const fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.accept = 'image/*';
+      fileInput.onchange = async () => {
+        const file = fileInput.files[0];
+        if (file) {
+          this.showToast('이미지 업로드 중... ⏳', 'info');
+          try {
+            const uploaded = await api.uploadFile(file);
+            const range = this.quill.getSelection(true) || { index: this.quill.getLength() };
+            this.quill.insertEmbed(range.index, 'image', uploaded.url);
+            this.quill.setSelection(range.index + 1);
+            this.showToast('이미지가 본문에 삽입되었습니다.', 'success');
+          } catch (err) {
+            this.showToast('이미지 업로드 실패', 'danger');
+          }
+        }
+      };
+      fileInput.click();
+    });
   }
 
-  openDetailModal(id) {
-    const p=this.posts.find(x=>x.id===id);if(!p)return;
-    p.views=(p.views||0)+1;this.saveData('jboard_posts',this.posts);
-    this.refreshCurrentBoard();
-    document.getElementById('detailTitle').textContent=p.title;
-    document.getElementById('detailMeta').innerHTML=`<div class="d-flex align-items-center gap-3 text-muted small"><span class="d-flex align-items-center gap-1"><img src="${p.authorAvatar}" width="22" height="22" class="rounded-circle border"><strong class="text-body">${p.author}</strong></span><span><i class="bi bi-calendar3 me-1"></i>${p.createdAt}</span><span><i class="bi bi-eye me-1"></i>${p.views}</span><span><i class="bi bi-heart me-1 text-danger"></i>${p.likes}</span></div>`;
-    document.getElementById('detailContent').innerHTML=p.content.replace(/\n/g,'<br>');
-    document.getElementById('detailLikeBtn').onclick=()=>{p.likes++;this.saveData('jboard_posts',this.posts);this.refreshCurrentBoard();this.openDetailModal(id);this.showToast('추천! ❤️');};
-    document.getElementById('detailCommentCount').textContent=`댓글 (${p.comments.length})`;
-    document.getElementById('commentsList').innerHTML=!p.comments.length?'<p class="text-muted small my-2">첫 댓글을 남겨보세요!</p>':p.comments.map(c=>`<div class="border-bottom py-2"><div class="d-flex justify-content-between text-muted small mb-1"><strong>${c.author}</strong><span>${c.date}</span></div><div class="small">${c.content}</div></div>`).join('');
-    document.getElementById('commentAddForm').onsubmit=e=>{e.preventDefault();const a=document.getElementById('commentAuthor').value.trim()||'익명',t=document.getElementById('commentText').value.trim();if(!t)return;p.comments.push({author:a,date:new Date().toISOString().replace('T',' ').substring(0,16),content:t});this.saveData('jboard_posts',this.posts);document.getElementById('commentText').value='';this.refreshCurrentBoard();this.openDetailModal(id);this.showToast('댓글 등록됨');};
-    const el=document.getElementById('postDetailModal');(bootstrap.Modal.getInstance(el)||new bootstrap.Modal(el)).show();
+  setupDropzone() {
+    const dropzone = document.getElementById('multiFileDropzone');
+    const fileInput = document.getElementById('multiFileInput');
+    if (!dropzone || !fileInput) return;
+
+    dropzone.onclick = () => fileInput.click();
+
+    fileInput.onchange = (e) => {
+      this.addFilesToQueue(Array.from(e.target.files));
+      fileInput.value = '';
+    };
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+      dropzone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.add('drag-over');
+      });
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+      dropzone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.remove('drag-over');
+      });
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+      const files = Array.from(e.dataTransfer.files);
+      if (files.length > 0) {
+        this.addFilesToQueue(files);
+      }
+    });
   }
 
-  deletePost(id) {
-    if(!confirm('삭제하시겠습니까?'))return;
-    this.posts=this.posts.filter(p=>p.id!==id);this.saveData('jboard_posts',this.posts);this.refreshCurrentBoard();this.showToast('삭제됨','warning');
+  addFilesToQueue(files) {
+    files.forEach(file => {
+      if (!this.attachedFiles.some(f => f.name === file.name && f.size === file.size)) {
+        this.attachedFiles.push({
+          file,
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          status: 'ready'
+        });
+      }
+    });
+    this.renderAttachedFilesList();
+    this.showToast(`${files.length}개 파일이 첨부 큐에 추가되었습니다.`, 'info');
+  }
+
+  renderAttachedFilesList() {
+    const container = document.getElementById('attachedFilesList');
+    const countBadge = document.getElementById('dropzoneCountBadge');
+    if (!container) return;
+
+    if (countBadge) {
+      countBadge.textContent = `${this.attachedFiles.length}개 첨부됨`;
+      countBadge.className = this.attachedFiles.length > 0 ? 'badge bg-primary' : 'badge bg-secondary-subtle text-secondary';
+    }
+
+    if (this.attachedFiles.length === 0) {
+      container.innerHTML = '';
+      return;
+    }
+
+    container.innerHTML = this.attachedFiles.map((item, idx) => {
+      let icon = 'bi-file-earmark';
+      if (item.type?.startsWith('image/')) icon = 'bi-file-earmark-image text-primary';
+      else if (item.type?.includes('pdf')) icon = 'bi-file-earmark-pdf text-danger';
+      else if (item.type?.includes('zip') || item.type?.includes('compressed')) icon = 'bi-file-earmark-zip text-warning';
+      else if (item.type?.includes('word') || item.type?.includes('document')) icon = 'bi-file-earmark-word text-info';
+
+      const formattedSize = this.formatFileSize(item.size);
+
+      return `
+        <div class="attached-file-item" data-index="${idx}">
+          <div class="attached-file-info">
+            <i class="bi ${icon} fs-5"></i>
+            <span class="attached-file-name" title="${this.escapeHtml(item.name)}">${this.escapeHtml(item.name)}</span>
+            <span class="badge bg-secondary-subtle text-secondary small">${formattedSize}</span>
+          </div>
+          <button type="button" class="btn btn-sm btn-link text-danger p-0 delete-attachment-btn" data-index="${idx}" title="삭제">
+            <i class="bi bi-x-circle fs-6"></i>
+          </button>
+        </div>
+      `;
+    }).join('');
+
+    container.querySelectorAll('.delete-attachment-btn').forEach(btn => {
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        const idx = parseInt(btn.dataset.index, 10);
+        this.attachedFiles.splice(idx, 1);
+        this.renderAttachedFilesList();
+      };
+    });
+  }
+
+  openPostWriteModal() {
+    const authorInput = document.getElementById('postAuthor');
+    if (authorInput) {
+      authorInput.value = this.currentUser ? this.currentUser.name : (authorInput.value || '관리자');
+    }
+    const modalEl = document.getElementById('postWriteModal');
+    if (!modalEl) return;
+
+    const modalInstance = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+    modalInstance.show();
+
+    setTimeout(() => {
+      this.initQuillEditor();
+      this.attachedFiles = [];
+      this.renderAttachedFilesList();
+      this.setupDropzone();
+    }, 150);
+  }
+
+  async handleCreatePost() {
+    const title = document.getElementById('postTitle').value.trim();
+    const author = document.getElementById('postAuthor').value.trim();
+    const cat = document.getElementById('postCategory').value;
+    const catN = document.getElementById('postCategory').selectedOptions[0].text;
+    const notice = document.getElementById('postIsNotice').checked;
+
+    const content = this.quill ? this.quill.root.innerHTML : document.getElementById('postContent').value.trim();
+    const textContent = this.quill ? this.quill.getText().trim() : content;
+
+    if (!title || !author || (!textContent && !content.includes('<img'))) {
+      alert('제목, 작성자, 본문 내용을 모두 입력하세요.');
+      return;
+    }
+
+    const submitBtn = document.querySelector('#postWriteForm button[type="submit"]');
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>등록 중...';
+    }
+
+    try {
+      // 1. Upload any pending attachments to Vercel Blob
+      const finalAttachments = [];
+      for (const item of this.attachedFiles) {
+        if (item.url) {
+          finalAttachments.push({ name: item.name, size: item.size, type: item.type, url: item.url });
+        } else if (item.file) {
+          const uploaded = await api.uploadFile(item.file);
+          finalAttachments.push(uploaded);
+        }
+      }
+
+      const finalTitle = notice ? `📢 ${title}` : title;
+      const authorEmail = this.currentUser ? this.currentUser.email : 'guest@jboard.local';
+
+      // 2. Call Serverless API (Neon DB or fallback)
+      let newPostData = null;
+      try {
+        const res = await api.createPost({
+          title: finalTitle,
+          category: cat,
+          author,
+          author_email: authorEmail,
+          content,
+          attachments: finalAttachments
+        });
+        if (res.post) newPostData = res.post;
+      } catch (apiErr) {
+        console.warn('API post creation note, using local post:', apiErr);
+      }
+
+      const newId = newPostData ? newPostData.id : (this.posts.length ? Math.max(...this.posts.map(p => p.id)) + 1 : 1);
+      const newPost = {
+        id: newId,
+        category: cat,
+        categoryName: catN,
+        title: finalTitle,
+        author,
+        authorAvatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(author)}`,
+        content,
+        views: 0,
+        likes: 0,
+        comments: [],
+        attachments: finalAttachments,
+        createdAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
+        isNotice: notice
+      };
+
+      this.posts.unshift(newPost);
+      this.saveData('jboard_posts', this.posts);
+
+      document.getElementById('postWriteForm').reset();
+      if (this.quill) this.quill.setContents([]);
+      this.attachedFiles = [];
+      this.renderAttachedFilesList();
+
+      bootstrap.Modal.getInstance(document.getElementById('postWriteModal'))?.hide();
+      this.refreshCurrentBoard();
+      this.showToast('새 글이 성공적으로 등록되었습니다! 🎉', 'success');
+    } catch (err) {
+      console.error('Post creation error:', err);
+      this.showToast(err.message || '게시글 등록 중 오류가 발생했습니다.', 'danger');
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '게시글 등록';
+      }
+    }
+  }
+
+  async openDetailModal(id) {
+    let p = this.posts.find(x => x.id === id);
+    try {
+      const res = await api.getPost(id);
+      if (res.post) {
+        p.views = res.post.views;
+        p.likes = res.post.likes;
+        p.comments = (res.comments || []).map(c => ({
+          author: c.author,
+          date: (c.created_at || '').replace('T', ' ').substring(0, 16),
+          content: c.content
+        }));
+        if (res.post.attachments) {
+          p.attachments = typeof res.post.attachments === 'string' ? JSON.parse(res.post.attachments) : res.post.attachments;
+        }
+      }
+    } catch (e) {
+      p.views = (p.views || 0) + 1;
+    }
+
+    this.saveData('jboard_posts', this.posts);
+    this.refreshCurrentBoard();
+
+    document.getElementById('detailTitle').textContent = p.title;
+    document.getElementById('detailMeta').innerHTML = `
+      <div class="d-flex align-items-center gap-3 text-muted small">
+        <span class="d-flex align-items-center gap-1">
+          <img src="${p.authorAvatar}" width="22" height="22" class="rounded-circle border">
+          <strong class="text-body">${this.escapeHtml(p.author)}</strong>
+        </span>
+        <span><i class="bi bi-calendar3 me-1"></i>${p.createdAt}</span>
+        <span><i class="bi bi-eye me-1"></i>${p.views}</span>
+        <span><i class="bi bi-heart me-1 text-danger"></i>${p.likes}</span>
+      </div>
+    `;
+
+    // Render Rich Content (supports HTML from Quill)
+    const isHtml = p.content.includes('<p>') || p.content.includes('<div>') || p.content.includes('<img');
+    document.getElementById('detailContent').innerHTML = isHtml ? p.content : p.content.replace(/\n/g, '<br>');
+
+    // Attachments display
+    const attachContainer = document.getElementById('detailAttachmentsContainer');
+    const attachList = document.getElementById('detailAttachmentsList');
+    const attachCount = document.getElementById('detailAttachmentsCount');
+
+    const attachments = Array.isArray(p.attachments) ? p.attachments : (typeof p.attachments === 'string' ? JSON.parse(p.attachments || '[]') : []);
+
+    if (attachments && attachments.length > 0) {
+      attachContainer.classList.remove('d-none');
+      attachCount.textContent = attachments.length;
+      attachList.innerHTML = attachments.map(att => {
+        let icon = 'bi-file-earmark';
+        if (att.type?.startsWith('image/')) icon = 'bi-file-earmark-image text-primary';
+        else if (att.type?.includes('pdf')) icon = 'bi-file-earmark-pdf text-danger';
+        else if (att.type?.includes('zip')) icon = 'bi-file-earmark-zip text-warning';
+
+        const formattedSize = this.formatFileSize(att.size);
+        return `
+          <a href="${att.url}" target="_blank" download="${this.escapeHtml(att.name)}" class="detail-attachment-badge" title="다운로드/열기">
+            <i class="bi ${icon}"></i>
+            <span>${this.escapeHtml(att.name)}</span>
+            <span class="badge bg-secondary-subtle text-secondary small">${formattedSize}</span>
+            <i class="bi bi-download ms-1 opacity-75"></i>
+          </a>
+        `;
+      }).join('');
+    } else {
+      attachContainer.classList.add('d-none');
+    }
+
+    document.getElementById('detailLikeBtn').onclick = async () => {
+      try { await api.likePost(id); } catch {}
+      p.likes++;
+      this.saveData('jboard_posts', this.posts);
+      this.refreshCurrentBoard();
+      this.openDetailModal(id);
+      this.showToast('추천! ❤️');
+    };
+
+    const comments = p.comments || [];
+    document.getElementById('detailCommentCount').textContent = `댓글 (${comments.length})`;
+    document.getElementById('commentsList').innerHTML = !comments.length
+      ? '<p class="text-muted small my-2">첫 댓글을 남겨보세요!</p>'
+      : comments.map(c => `
+        <div class="border-bottom py-2">
+          <div class="d-flex justify-content-between text-muted small mb-1">
+            <strong>${this.escapeHtml(c.author)}</strong>
+            <span>${c.date}</span>
+          </div>
+          <div class="small">${this.escapeHtml(c.content)}</div>
+        </div>
+      `).join('');
+
+    document.getElementById('commentAddForm').onsubmit = async (e) => {
+      e.preventDefault();
+      const a = document.getElementById('commentAuthor').value.trim() || '익명';
+      const t = document.getElementById('commentText').value.trim();
+      if (!t) return;
+      try {
+        await api.addComment({ post_id: id, author: a, author_email: '', content: t });
+      } catch {}
+      p.comments.push({ author: a, date: new Date().toISOString().replace('T', ' ').substring(0, 16), content: t });
+      this.saveData('jboard_posts', this.posts);
+      document.getElementById('commentText').value = '';
+      this.refreshCurrentBoard();
+      this.openDetailModal(id);
+      this.showToast('댓글이 등록되었습니다.');
+    };
+
+    const el = document.getElementById('postDetailModal');
+    (bootstrap.Modal.getInstance(el) || new bootstrap.Modal(el)).show();
+  }
+
+  async deletePost(id) {
+    if (!confirm('정말 이 게시글을 삭제하시겠습니까?')) return;
+    try {
+      await api.deletePost(id);
+    } catch (e) {
+      console.warn('API delete error, deleting locally:', e);
+    }
+    this.posts = this.posts.filter(p => p.id !== id);
+    this.saveData('jboard_posts', this.posts);
+    this.refreshCurrentBoard();
+    this.showToast('삭제됨', 'warning');
   }
 
   // ═══════════════════════════════════════════════

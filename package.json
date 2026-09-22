@@ -12,7 +12,10 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "admin-lte": "^4.9.1"
+    "@neondatabase/serverless": "^1.1.0",
+    "@vercel/blob": "^2.8.0",
+    "admin-lte": "^4.9.1",
+    "quill": "^2.0.3"
   },
   "devDependencies": {
     "bootstrap-icons": "^1.13.1",
