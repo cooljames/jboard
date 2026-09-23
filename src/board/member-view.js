@@ -125,6 +125,8 @@ export function renderMemberBoard(app) {
 
 export function renderBoardTable(app, container) {
   if (!container) return;
+  // 비로그인 열람 모드: 글쓰기 불가, 읽기만 가능
+  const canWrite = !!app.currentUser;
   const filtered = app.posts.filter(p => {
     const mc = app.boardCategory === 'all' || p.category === app.boardCategory;
     const ms = !app.boardSearch ||
@@ -163,9 +165,13 @@ export function renderBoardTable(app, container) {
                 <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-search"></i></button>
               </div>
             </form>
+            ${canWrite ? `
             <button type="button" class="btn btn-primary btn-sm d-flex align-items-center gap-1 shadow-sm px-3" id="openWriteModalBtn">
               <i class="bi bi-pencil-fill"></i><span>새 글</span>
-            </button>
+            </button>` : `
+            <a href="#" class="btn btn-outline-primary btn-sm d-flex align-items-center gap-1 shadow-sm px-3 text-nowrap" id="guestWriteLoginBtn">
+              <i class="bi bi-box-arrow-in-right"></i><span>로그인 후 작성</span>
+            </a>`}
           </div>
         </div>
       </div>
@@ -283,9 +289,14 @@ export function renderBoardTable(app, container) {
     });
   });
 
-  // Write button
+  // Write button (login required)
   container.querySelector('#openWriteModalBtn')?.addEventListener('click', () => {
     app.openPostWriteModal();
+  });
+  container.querySelector('#guestWriteLoginBtn')?.addEventListener('click', e => {
+    e.preventDefault();
+    app.showToast('글 작성은 로그인 후 이용할 수 있습니다.', 'info');
+    app.navigate('login');
   });
 
   // Post detail & delete
@@ -305,7 +316,7 @@ export function renderBoardTable(app, container) {
 }
 
 export function refreshCurrentBoard(app) {
-  if (app.currentPage === 'home') {
+  if (app.currentPage === 'home' || app.currentPage === 'board') {
     const el = document.getElementById('homeBoardContainer');
     if (el) renderBoardTable(app, el);
   } else if (app.currentPage === 'admin' && app.adminPage === 'board') {

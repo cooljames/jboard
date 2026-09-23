@@ -2,6 +2,7 @@
 // Public Homepage & Public News Landing Views
 // ═══════════════════════════════════════════════════════════
 import { NewsDeskController } from '../news/news-view.js';
+import { renderBoardTable } from '../board/member-view.js';
 
 export function renderPublicLanding(app) {
   const totalPosts = app.posts.length;
@@ -21,6 +22,9 @@ export function renderPublicLanding(app) {
         <div class="d-none d-md-flex align-items-center gap-1">
           <a href="#" class="nav-link text-body fw-semibold d-flex align-items-center gap-1" data-nav="news">
             <i class="bi bi-newspaper text-danger"></i>실시간 뉴스 <span class="badge bg-danger rounded-pill px-1 text-xs">AI</span>
+          </a>
+          <a href="#" class="nav-link text-body fw-semibold d-flex align-items-center gap-1" data-nav="board">
+            <i class="bi bi-chat-square-text-fill text-primary"></i>커뮤니티 게시판
           </a>
           <a href="#updates" class="nav-link text-body-secondary">최신 업데이트</a>
           <a href="#posts" class="nav-link text-body-secondary">최신 소식</a>
@@ -134,7 +138,7 @@ export function renderPublicLanding(app) {
       <div class="text-center mb-5">
         <span class="section-label mb-3"><i class="bi bi-file-earmark-text-fill"></i> Community</span>
         <h2 class="section-title mt-3">최신 소식</h2>
-        <p class="text-body-secondary">활발한 커뮤니티에서 최신 정보를 만나보세요. 로그인 또는 무료 회원가입 시 전체 글을 볼 수 있습니다.</p>
+        <p class="text-body-secondary">로그인 없이도 실시간 뉴스와 커뮤니티 게시판을 자유롭게 열람할 수 있습니다. 글 작성·댓글·추천은 로그인 후 이용해 주세요.</p>
       </div>
       <div class="row g-3">
         ${recentPosts
@@ -162,6 +166,11 @@ export function renderPublicLanding(app) {
           </div>`
           )
           .join('')}
+      </div>
+      <div class="text-center mt-4">
+        <a href="#" class="btn btn-primary rounded-pill px-4" data-nav="board">
+          <i class="bi bi-chat-square-text-fill me-1"></i>커뮤니티 게시판 전체 보기
+        </a>
       </div>
     </div>
   </section>
@@ -197,6 +206,7 @@ export function renderPublicLanding(app) {
           <ul class="list-unstyled small">
             <li class="mb-2"><a href="#updates" class="text-body-secondary text-decoration-none">최신 업데이트</a></li>
             <li class="mb-2"><a href="#posts" class="text-body-secondary text-decoration-none">최신 소식</a></li>
+            <li class="mb-2"><a href="#" class="text-body-secondary text-decoration-none" data-nav="board">커뮤니티 게시판</a></li>
           </ul>
         </div>
         <div class="col-md-2">
@@ -288,4 +298,77 @@ export function renderPublicNews(app) {
   if (container) {
     app.newsController = new NewsDeskController(app, container);
   }
+}
+
+// ═══════════════════════════════════════════════════════════
+// Public Board (Guest read-only): 전체 글 열람 가능, 작성 불가
+// ═══════════════════════════════════════════════════════════
+export function renderPublicBoard(app) {
+  app.appRoot.innerHTML = `
+  <!-- ═══ Public Navbar ═══ -->
+  <nav class="pub-navbar notranslate" translate="no">
+    <div class="container-fluid px-3 px-xl-5">
+      <div class="d-flex align-items-center justify-content-between py-2">
+        <div class="d-flex align-items-center gap-3">
+          <a href="#" class="d-flex align-items-center gap-2 text-decoration-none" data-nav="home">
+            <i class="bi bi-kanban-fill fs-4" style="color:var(--jb-primary)"></i>
+            <span class="fw-bold fs-5 text-body">JnewsBoard</span>
+          </a>
+          <div class="btn-group p-1 bg-body-tertiary rounded-pill border ms-1" role="group">
+            <button type="button" class="btn btn-sm btn-light border-0 rounded-pill px-3 py-1 fw-semibold d-flex align-items-center gap-1 shadow-none" data-nav="news">
+              <i class="bi bi-newspaper"></i><span>실시간 뉴스</span>
+              <span class="badge bg-danger rounded-pill px-1.5 py-0 text-xs">AI</span>
+            </button>
+            <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 py-1 fw-semibold d-flex align-items-center gap-1 shadow-none" data-nav="board">
+              <i class="bi bi-chat-square-text-fill"></i><span>커뮤니티 게시판</span>
+            </button>
+            <button type="button" class="btn btn-sm btn-light border-0 rounded-pill px-3 py-1 fw-semibold d-flex align-items-center gap-1 shadow-none" data-nav="home">
+              <i class="bi bi-house"></i><span>홈으로</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+          <!-- Theme dropdown -->
+          <div class="dropdown me-1">
+            <button class="btn btn-sm btn-outline-secondary rounded-pill px-2 py-1 dropdown-toggle d-flex align-items-center gap-1" data-bs-toggle="dropdown" title="테마 변경">
+              <i class="bi bi-circle-half"></i>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+              <li><button type="button" class="dropdown-item d-flex align-items-center" data-bs-theme-value="light"><i class="bi bi-sun-fill me-2 text-warning"></i>라이트</button></li>
+              <li><button type="button" class="dropdown-item d-flex align-items-center" data-bs-theme-value="dark"><i class="bi bi-moon-stars-fill me-2 text-primary"></i>다크</button></li>
+            </ul>
+          </div>
+          <a href="#" class="btn btn-sm btn-primary rounded-pill px-3" data-nav="login">로그인 / 무료 회원가입</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ═══ Guest Notice ═══ -->
+  <div class="container-fluid px-3 px-xl-5 mt-3">
+    <div class="alert alert-info py-2 px-3 small mb-0 d-flex align-items-center justify-content-between flex-wrap gap-2">
+      <span><i class="bi bi-eye me-1"></i>비로그인 열람 모드입니다. 글 작성·댓글·추천은 로그인 후 이용할 수 있습니다.</span>
+      <a href="#" class="fw-semibold text-decoration-none" data-nav="login">로그인하기 <i class="bi bi-arrow-right"></i></a>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <main class="pub-main-container">
+    <div class="container-fluid px-3 px-xl-5">
+      <div id="homeBoardContainer"></div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="pub-footer bg-body border-top py-4 mt-4 notranslate" translate="no">
+    <div class="container-fluid px-3 px-xl-5 text-center text-body-secondary small">
+      © 2026 JnewsBoard Project. All rights reserved.
+    </div>
+  </footer>
+  `;
+
+  app.bindNavLinks();
+  app.bindThemeButtons();
+  renderBoardTable(app, document.getElementById('homeBoardContainer'));
 }

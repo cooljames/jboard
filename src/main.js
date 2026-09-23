@@ -19,7 +19,7 @@ import { showToast, escapeHtml, formatFileSize, formatLocalTime, badgeClass, pag
 import { syncWithBackend, signup, login, touchMemberLogin, loginLocal, logout, openWithdrawModal, handleWithdraw } from './auth/auth-manager.js';
 
 // Views
-import { renderPublicLanding, renderPublicNews } from './home/home-view.js';
+import { renderPublicLanding, renderPublicNews, renderPublicBoard } from './home/home-view.js';
 import { renderLogin, renderSignup } from './auth/auth-views.js';
 import { renderMemberBoard, renderBoardTable, refreshCurrentBoard } from './board/member-view.js';
 import { initQuillEditor, setupDropzone, addFilesToQueue, renderAttachedFilesList, openPostWriteModal, handleCreatePost } from './board/post-write-modal.js';
@@ -224,9 +224,9 @@ class JBoardApp {
         }
         break;
       case 'board':
+        // 비로그인: 읽기 전용 공개 게시판
         if (!this.currentUser) {
-          this.showToast('로그인이 필요합니다.', 'info');
-          this.navigate('login');
+          this.renderPublicBoard();
           return;
         }
         if (this.currentUser.role === 'admin') {
@@ -271,6 +271,7 @@ class JBoardApp {
   // Views delegation
   renderPublicLanding() { renderPublicLanding(this); }
   renderPublicNews() { renderPublicNews(this); }
+  renderPublicBoard() { renderPublicBoard(this); }
   renderLogin() { renderLogin(this); }
   renderSignup() { renderSignup(this); }
   renderMemberBoard() { renderMemberBoard(this); }

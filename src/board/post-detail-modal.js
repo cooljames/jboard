@@ -107,7 +107,39 @@ export async function openDetailModal(app, id) {
     attachContainer.classList.add('d-none');
   }
 
+  // 비로그인 열람 모드: 추천·댓글 작성 불가, 읽기만 가능
+  const detailLikeBtn = document.getElementById('detailLikeBtn');
+  const commentAddForm = document.getElementById('commentAddForm');
+  let guestCommentPrompt = document.getElementById('guestCommentPrompt');
+  if (!app.currentUser) {
+    detailLikeBtn.style.display = 'none';
+    commentAddForm.style.display = 'none';
+    if (!guestCommentPrompt) {
+      guestCommentPrompt = document.createElement('div');
+      guestCommentPrompt.id = 'guestCommentPrompt';
+      guestCommentPrompt.className = 'small text-body-secondary py-2';
+      guestCommentPrompt.innerHTML = '댓글 작성과 추천은 <a href="#" id="guestLoginLink">로그인</a> 후 이용할 수 있습니다.';
+      commentAddForm.parentNode.insertBefore(guestCommentPrompt, commentAddForm);
+    } else {
+      guestCommentPrompt.style.display = '';
+    }
+    document.getElementById('guestLoginLink')?.addEventListener('click', e => {
+      e.preventDefault();
+      (window.bootstrap.Modal.getInstance(document.getElementById('postDetailModal')))?.hide();
+      app.navigate('login');
+    });
+  } else {
+    detailLikeBtn.style.display = '';
+    commentAddForm.style.display = '';
+    if (guestCommentPrompt) guestCommentPrompt.style.display = 'none';
+  }
+
   document.getElementById('detailLikeBtn').onclick = async () => {
+    if (!app.currentUser) {
+      showToast('로그인이 필요합니다.', 'info');
+      app.navigate('login');
+      return;
+    }
     try { await api.likePost(id); } catch {}
     p.likes++;
     app.saveData('jboard_posts', app.posts);
