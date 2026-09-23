@@ -169,6 +169,32 @@ export default async function handler(req, res) {
     }
 
     // ----------------------------------------------------
+    // UPDATE ROLE (Admin: 관리자/에디터/일반회원 권한 변경)
+    // ----------------------------------------------------
+    if (action === 'updateRole' && method === 'POST') {
+      const { email, role } = body || {};
+      if (!email || !['admin', 'editor', 'member'].includes(role)) {
+        return res.status(400).json({ error: '유효한 이메일과 권한(admin/editor/member)이 필요합니다.' });
+      }
+
+      if (sql) {
+        const rows = await sql`SELECT id FROM jboard_users WHERE email = ${email}`;
+        if (rows.length === 0) {
+          return res.status(404).json({ error: '해당 이메일의 계정을 찾을 수 없습니다.' });
+        }
+        await sql`UPDATE jboard_users SET role = ${role} WHERE email = ${email}`;
+        return res.status(200).json({ success: true, email, role });
+      } else {
+        const user = fallbackUsers.find((u) => u.email === email);
+        if (!user) {
+          return res.status(404).json({ error: '해당 이메일의 계정을 찾을 수 없습니다.' });
+        }
+        user.role = role;
+        return res.status(200).json({ success: true, email, role });
+      }
+    }
+
+    // ----------------------------------------------------
     // LIST USERS (Admin)
     // ----------------------------------------------------
     if (action === 'users' && method === 'GET') {

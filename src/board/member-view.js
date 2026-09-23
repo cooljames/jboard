@@ -15,7 +15,7 @@ export function renderMemberBoard(app) {
         <div class="d-flex align-items-center gap-3">
           <a href="#" class="d-flex align-items-center gap-2 text-decoration-none" data-nav="home">
             <i class="bi bi-kanban-fill fs-4" style="color:var(--jb-primary)"></i>
-            <span class="fw-bold fs-5 text-body">J뉴스보드</span>
+            <span class="fw-bold fs-5 text-body">JnewsBoard</span>
           </a>
           <!-- Tab switcher: 실시간 뉴스를 게시판 메뉴 앞에 배치 -->
           <div class="btn-group p-1 bg-body-tertiary rounded-pill border ms-1" role="group">
@@ -84,8 +84,8 @@ export function renderMemberBoard(app) {
       <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
         <div class="d-flex align-items-center gap-2">
           <i class="bi bi-kanban-fill fs-5" style="color:var(--jb-primary)"></i>
-          <span class="fw-bold">J뉴스보드</span>
-          <span class="text-body-secondary small ms-2">© 2026 J뉴스보드 · AdminLTE 4 모던 커뮤니티 플랫폼</span>
+          <span class="fw-bold">JnewsBoard</span>
+          <span class="text-body-secondary small ms-2">© 2026 JnewsBoard · AdminLTE 4 모던 커뮤니티 플랫폼</span>
         </div>
         <div class="d-flex align-items-center gap-3 small text-body-secondary">
           <span>로그인: <strong>${app.currentUser.name}</strong></span>

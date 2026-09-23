@@ -157,7 +157,7 @@ export function postToJBoard(controller) {
   `;
 
   controller.app?.openPostWriteModal?.(null, {
-    title: `[AI 브리핑] ${title}`,
+    title: `${title}`,
     content: fullPostHtml,
     category: 'info',
   });

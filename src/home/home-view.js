@@ -16,7 +16,7 @@ export function renderPublicLanding(app) {
       <div class="d-flex align-items-center justify-content-between py-2">
         <a href="#" class="d-flex align-items-center gap-2 text-decoration-none" data-nav="home">
           <i class="bi bi-kanban-fill fs-4" style="color:var(--jb-primary)"></i>
-          <span class="fw-bold fs-5 text-body">J뉴스보드</span>
+          <span class="fw-bold fs-5 text-body">JnewsBoard</span>
         </a>
         <div class="d-none d-md-flex align-items-center gap-1">
           <a href="#" class="nav-link text-body fw-semibold d-flex align-items-center gap-1" data-nav="news">
@@ -170,7 +170,7 @@ export function renderPublicLanding(app) {
   <section class="cta-section" id="contact">
     <div class="container-fluid px-3 px-xl-5">
       <div class="cta-box text-center">
-        <h2 class="fw-bold mb-3" style="font-size:clamp(1.5rem,3vw,2.2rem)">지금 바로 J뉴스보드를 시작하세요</h2>
+        <h2 class="fw-bold mb-3" style="font-size:clamp(1.5rem,3vw,2.2rem)">지금 바로 JnewsBoard를 시작하세요</h2>
         <p class="opacity-75 mb-4 mx-auto" style="max-width:500px">무료로 가입하고 실시간 AI 뉴스와 활발한 커뮤니티 소통을 경험해 보세요.</p>
         <div class="d-flex flex-wrap justify-content-center gap-3">
           <a href="#" class="hero-cta" style="background:#fff;color:var(--jb-primary);border:2px solid #fff" data-nav="login">
@@ -188,7 +188,7 @@ export function renderPublicLanding(app) {
         <div class="col-md-4">
           <div class="d-flex align-items-center gap-2 mb-3">
             <i class="bi bi-kanban-fill fs-4" style="color:var(--jb-primary)"></i>
-            <span class="fw-bold fs-5">J뉴스보드</span>
+            <span class="fw-bold fs-5">JnewsBoard</span>
           </div>
           <p class="text-body-secondary small">AdminLTE 4 기반의 차세대 커뮤니티 플랫폼. AI 뉴스 분석, 게시판, 회원을 효율적으로 운영하세요.</p>
         </div>
@@ -214,7 +214,7 @@ export function renderPublicLanding(app) {
       </div>
       <hr class="my-4">
       <div class="d-flex flex-wrap justify-content-between align-items-center">
-        <small class="text-body-secondary">© 2026 J뉴스보드 Project. All rights reserved.</small>
+        <small class="text-body-secondary">© 2026 JnewsBoard Project. All rights reserved.</small>
         <div class="d-flex gap-3">
           <a href="#" class="text-body-secondary"><i class="bi bi-github fs-5"></i></a>
           <a href="#" class="text-body-secondary"><i class="bi bi-twitter-x fs-5"></i></a>
@@ -237,7 +237,7 @@ export function renderPublicNews(app) {
         <div class="d-flex align-items-center gap-3">
           <a href="#" class="d-flex align-items-center gap-2 text-decoration-none" data-nav="home">
             <i class="bi bi-kanban-fill fs-4" style="color:var(--jb-primary)"></i>
-            <span class="fw-bold fs-5 text-body">J뉴스보드</span>
+            <span class="fw-bold fs-5 text-body">JnewsBoard</span>
           </a>
           <div class="btn-group p-1 bg-body-tertiary rounded-pill border ms-1" role="group">
             <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 py-1 fw-semibold d-flex align-items-center gap-1 shadow-none" data-nav="news">
@@ -277,7 +277,7 @@ export function renderPublicNews(app) {
   <!-- Footer -->
   <footer class="pub-footer bg-body border-top py-4 mt-4 notranslate" translate="no">
     <div class="container-fluid px-3 px-xl-5 text-center text-body-secondary small">
-      © 2026 J뉴스보드 Project. 실시간 구글 뉴스 & Gemini AI 에이전트.
+      © 2026 JnewsBoard Project. 실시간 구글 뉴스 & Gemini AI 에이전트.
     </div>
   </footer>
   `;

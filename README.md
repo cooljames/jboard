@@ -1,4 +1,4 @@
-# 📊 J뉴스보드 - AdminLTE v4 기반 커뮤니티 & 관리자 플랫폼
+# 📊 JnewsBoard - AdminLTE v4 기반 커뮤니티 & 관리자 플랫폼
 
 > **AdminLTE v4** 최신 표준 규격과 **ApexCharts**를 적용한 반응형 커뮤니티 게시판 및 관리자 대시보드 웹 애플리케이션입니다.
 

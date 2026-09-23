@@ -4,11 +4,11 @@ import { getDb, initDb } from './_db.js';
 let fallbackPosts = [
   {
     id: 1,
-    title: '[공지] J뉴스보드 AdminLTE v4 및 Vercel 클라우드 시스템 오픈',
+    title: '[공지] JnewsBoard AdminLTE v4 및 Vercel 클라우드 시스템 오픈',
     category: 'notice',
     author: '관리자',
     author_email: 'admin@jboard.co.kr',
-    content: '<p>안녕하세요! <strong>J뉴스보드 v4</strong>에 오신 것을 환영합니다.</p><p>Neon Postgres 및 Vercel Blob 스토리지, Quill 리치 텍스트 에디터가 연동된 정통 엔터프라이즈 게시판입니다.</p>',
+    content: '<p>안녕하세요! <strong>JnewsBoard v4</strong>에 오신 것을 환영합니다.</p><p>Neon Postgres 및 Vercel Blob 스토리지, Quill 리치 텍스트 에디터가 연동된 정통 엔터프라이즈 게시판입니다.</p>',
     views: 128,
     likes: 15,
     comments_count: 2,

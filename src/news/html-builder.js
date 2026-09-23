@@ -47,7 +47,7 @@ export function buildHtmlDocument(title, nowDisplay, analyses, articles, tags) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title} - J뉴스보드 AI News Briefing</title>
+  <title>${title} - JnewsBoard AI News Briefing</title>
   <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -128,7 +128,7 @@ export function buildHtmlDocument(title, nowDisplay, analyses, articles, tags) {
   <div class="container">
     <div class="card header-card">
       <h1>${title}</h1>
-      <div class="meta">발행일시: ${nowDisplay} | J뉴스보드 AI News Agent</div>
+      <div class="meta">발행일시: ${nowDisplay} | JnewsBoard AI News Agent</div>
     </div>
 
     <div class="card">

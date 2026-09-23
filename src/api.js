@@ -1,4 +1,4 @@
-// J뉴스보드 REST API Client for Vercel Serverless + Neon Postgres + Vercel Blob
+// JnewsBoard REST API Client for Vercel Serverless + Neon Postgres + Vercel Blob
 
 const BASE_URL = '/api';
 
@@ -158,6 +158,19 @@ export const api = {
     if (!res.ok) throw new Error('회원 목록 조회 실패');
     const data = await res.json();
     return data.users || [];
+  },
+
+  async updateUserRole(email, role) {
+    const res = await fetch(`${BASE_URL}/auth?action=updateRole`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, role })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || '권한 변경에 실패했습니다.');
+    }
+    return data;
   },
 
   // ----------------------------------------------------

@@ -10,7 +10,7 @@ export function renderLogin(app) {
       <div class="text-center mb-4">
         <a href="#" class="text-decoration-none d-flex align-items-center justify-content-center gap-2 mb-3" data-nav="home">
           <i class="bi bi-kanban-fill fs-3" style="color:var(--jb-primary)"></i>
-          <span class="auth-logo">J뉴스보드</span>
+          <span class="auth-logo">JnewsBoard</span>
         </a>
         <p class="text-body-secondary small">로그인하거나 무료 회원가입 후 시작하세요</p>
       </div>
@@ -52,33 +52,10 @@ export function renderLogin(app) {
         <a href="#" class="small fw-semibold text-decoration-none ms-1" style="color:var(--jb-primary)" data-nav="signup">무료 회원가입</a>
       </div>
 
-      <div class="mt-4 p-3 rounded-3 text-start" style="background:var(--bs-tertiary-bg)">
-        <small class="text-body-secondary d-block mb-2 fw-semibold"><i class="bi bi-info-circle me-1"></i>테스트 계정 선택</small>
-        <div class="d-flex flex-column gap-2 small">
-          <div class="d-flex align-items-center justify-content-between">
-            <div><span class="badge bg-danger me-1">관리자</span> <code>admin@jboard.co.kr</code> / <code>admin1234</code></div>
-            <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2" id="fillAdminBtn" style="font-size:0.78rem">선택</button>
-          </div>
-          <div class="d-flex align-items-center justify-content-between">
-            <div><span class="badge bg-primary me-1">일반회원</span> <code>user@jboard.co.kr</code> / <code>user1234</code></div>
-            <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2" id="fillUserBtn" style="font-size:0.78rem">선택</button>
-          </div>
-        </div>
-      </div>
     </div>
   </div>`;
 
   app.bindNavLinks();
-
-  // Quick fill buttons
-  document.getElementById('fillAdminBtn')?.addEventListener('click', () => {
-    document.getElementById('loginEmail').value = 'admin@jboard.co.kr';
-    document.getElementById('loginPassword').value = 'admin1234';
-  });
-  document.getElementById('fillUserBtn')?.addEventListener('click', () => {
-    document.getElementById('loginEmail').value = 'user@jboard.co.kr';
-    document.getElementById('loginPassword').value = 'user1234';
-  });
 
   // Toggle password visibility
   document.getElementById('toggleLoginPw')?.addEventListener('click', () => {
@@ -124,7 +101,7 @@ export function renderSignup(app) {
       <div class="text-center mb-4">
         <a href="#" class="text-decoration-none d-flex align-items-center justify-content-center gap-2 mb-3" data-nav="home">
           <i class="bi bi-kanban-fill fs-3" style="color:var(--jb-primary)"></i>
-          <span class="auth-logo">J뉴스보드</span>
+          <span class="auth-logo">JnewsBoard</span>
         </a>
         <p class="text-body-secondary small">무료 계정을 만들고 시작하세요</p>
       </div>
@@ -204,7 +181,7 @@ export function renderSignup(app) {
           <div class="tab-content p-4 small lh-lg">
             <div class="tab-pane fade show active" id="termsTabPane" role="tabpanel">
               <h6 class="fw-bold mb-2">제1조 (목적)</h6>
-              <p class="text-body-secondary mb-3">이 약관은 J뉴스보드 커뮤니티 및 실시간 뉴스 서비스의 이용 조건과 운영 원칙을 정합니다.</p>
+              <p class="text-body-secondary mb-3">이 약관은 JnewsBoard 커뮤니티 및 실시간 뉴스 서비스의 이용 조건과 운영 원칙을 정합니다.</p>
               <h6 class="fw-bold mb-2">제2조 (계정 관리)</h6>
               <p class="text-body-secondary mb-3">이메일 1개당 1개의 계정을 만들 수 있으며, 비밀번호 관리 책임은 회원 본인에게 있습니다.</p>
               <h6 class="fw-bold mb-2">제3조 (금지 행위)</h6>

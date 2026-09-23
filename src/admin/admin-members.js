@@ -3,6 +3,7 @@
 // ═══════════════════════════════════════════════════════════
 import { pageHeader, smallBox, showToast, bindCardTools } from '../utils/ui-helpers.js';
 import { renderAdminPage } from './admin-layout.js';
+import { api } from '../api.js';
 
 export function renderMembers(app) {
   const c = app.adminContainer;
@@ -63,7 +64,14 @@ export function renderMembers(app) {
                     </div>
                   </td>
                   <td class="small">${m.email}</td>
-                  <td class="text-center"><span class="badge ${rb[m.role]} rounded-pill">${rl[m.role]}</span></td>
+                  <td class="text-center">
+                    <div class="d-flex align-items-center justify-content-center gap-1">
+                      <span class="badge ${rb[m.role] || 'bg-secondary'} rounded-pill">${rl[m.role] || m.role}</span>
+                      <select class="form-select form-select-sm role-select py-0 px-1" data-id="${m.id}" style="width:92px;font-size:0.78rem;" title="권한 변경">
+                        ${['admin', 'editor', 'member'].map(r => `<option value="${r}" ${m.role === r ? 'selected' : ''}>${rl[r]}</option>`).join('')}
+                      </select>
+                    </div>
+                  </td>
                   <td class="text-center"><span class="badge ${sb[m.status]} rounded-pill">${sl[m.status]}</span></td>
                   <td class="text-center fw-semibold">${m.posts}</td>
                   <td class="text-center text-body-secondary small">${m.lastLogin}</td>
@@ -86,6 +94,44 @@ export function renderMembers(app) {
   `;
 
   bindCardTools();
+
+  // 역할 변경 (관리자/에디터/일반회원) — 로그인 계정(users)까지 동기화
+  c.querySelectorAll('.role-select').forEach(el => {
+    el.addEventListener('change', async e => {
+      const id = parseInt(el.getAttribute('data-id'));
+      const newRole = el.value;
+      const member = app.members.find(m => m.id === id);
+      if (!member) return;
+
+      // 본인 계정 권한 변경 방지 (관리자 잠금 방지)
+      if (app.currentUser && member.email === app.currentUser.email) {
+        showToast('본인 계정의 권한은 변경할 수 없습니다.', 'warning');
+        el.value = member.role;
+        return;
+      }
+
+      const prevRole = member.role;
+      member.role = newRole;
+      app.saveData('jboard_members', app.members);
+
+      // 로그인용 계정 동기화 (이메일 기준)
+      const user = app.users.find(u => u.email === member.email);
+      if (user) {
+        user.role = newRole;
+        app.saveData('jboard_users', app.users);
+      }
+
+      // 서버(DB) 동기화 — 실패해도 로컬 변경은 유지
+      try {
+        await api.updateUserRole(member.email, newRole);
+      } catch (err) {
+        console.warn('[Role update] 서버 동기화 실패, 로컬만 반영:', err.message);
+      }
+
+      renderMembers(app);
+      showToast(`${member.name}님의 권한이 ${rl[prevRole] || prevRole} → ${rl[newRole]}(으)로 변경되었습니다.`, 'success');
+    });
+  });
 
   c.querySelectorAll('.btn-mdel').forEach(el => {
     el.addEventListener('click', e => {

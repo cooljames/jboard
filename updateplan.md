@@ -1,7 +1,7 @@
-# 📋 J뉴스보드 리팩토링 종합 계획서 (AdminLTE v4 표준 규격 반영)
+# 📋 JnewsBoard 리팩토링 종합 계획서 (AdminLTE v4 표준 규격 반영)
 
 > **참조 사이트**: [AdminLTE v4 Official Theme Demo](https://adminlte.io/themes/v4/index.html)  
-> **프로젝트**: J뉴스보드 (커뮤니티 게시판 & 관리자 플랫폼)  
+> **프로젝트**: JnewsBoard (커뮤니티 게시판 & 관리자 플랫폼)  
 > **작성일**: 2026-09-22  
 > **상태**: ✅ 리팩토링 및 E2E 브라우저 검증 완료
 
@@ -9,7 +9,7 @@
 
 ## 1. 개요 및 리팩토링 목적
 
-본 계획서는 공식 **AdminLTE v4** 최신 디자인 가이드라인 및 컴포넌트 아키텍처를 분석하여, 현재 구동 중인 `J뉴스보드` 애플리케이션의 관리자 대시보드와 UI/UX를 공식 데모 수준으로 리팩토링하기 위한 단계별 실행 로드맵입니다.
+본 계획서는 공식 **AdminLTE v4** 최신 디자인 가이드라인 및 컴포넌트 아키텍처를 분석하여, 현재 구동 중인 `JnewsBoard` 애플리케이션의 관리자 대시보드와 UI/UX를 공식 데모 수준으로 리팩토링하기 위한 단계별 실행 로드맵입니다.
 
 ### 핵심 목표
 1. **공식 AdminLTE v4 규격 100% 일치**: 공식 데모(`index.html`)의 DOM 쉘 구조, BEM 클래스 네이밍, 아이콘 체계, 컬러 스킴 반영.
@@ -23,9 +23,9 @@
 
 ---
 
-## 2. AdminLTE v4 공식 규격 vs 현재 J뉴스보드 비교 분석 (Gap Analysis)
+## 2. AdminLTE v4 공식 규격 vs 현재 JnewsBoard 비교 분석 (Gap Analysis)
 
-| 구분 | AdminLTE v4 공식 규격 (`index.html`) | 현재 J뉴스보드 구현 상태 | 리팩토링 과제 |
+| 구분 | AdminLTE v4 공식 규격 (`index.html`) | 현재 JnewsBoard 구현 상태 | 리팩토링 과제 |
 | :--- | :--- | :--- | :--- |
 | **기본 폰트** | `Source Sans 3` (Google Fonts) | `Inter` | `Source Sans 3` 웹폰트 추가 및 타이포그래피 정돈 |
 | **테마 초기화** | `<head>` 인라인 스크립트로 FOUC 방지 | JS 번들 로드 후 `initTheme()` 호출 | `<head>`에 공식 인라인 테마 판별 스크립트 이식 |

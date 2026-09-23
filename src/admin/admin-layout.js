@@ -140,7 +140,7 @@ export function renderAdmin(app) {
       <div class="sidebar-brand">
         <a href="#" class="brand-link" data-nav="home">
           <i class="bi bi-kanban-fill text-primary fs-3"></i>
-          <span class="brand-text fw-light text-white">J뉴스보드 <b class="fw-bold">v4</b></span>
+          <span class="brand-text fw-light text-white">JnewsBoard <b class="fw-bold">v4</b></span>
           <span class="badge bg-primary-subtle text-primary rounded-pill px-2 py-1 ms-1 text-xs">AdminLTE</span>
         </a>
       </div>
@@ -188,7 +188,7 @@ export function renderAdmin(app) {
     <!-- ═══ App Footer ═══ -->
     <footer class="app-footer text-muted py-3 px-4 bg-body border-top notranslate" translate="no">
       <div class="float-end d-none d-sm-inline"><b>AdminLTE</b> 4.9.1 Official Theme</div>
-      <strong>© 2026 <a href="#" class="text-decoration-none">J뉴스보드</a>.</strong> All rights reserved.
+      <strong>© 2026 <a href="#" class="text-decoration-none">JnewsBoard</a>.</strong> All rights reserved.
     </footer>
   </div>`;
 

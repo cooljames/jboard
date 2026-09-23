@@ -12,7 +12,7 @@ export function renderDashboard(app) {
   const am = app.members.filter(m => m.status === 'active').length;
 
   c.innerHTML = `
-    ${pageHeader('통합 대시보드', 'J뉴스보드 실시간 운영 지표 및 활동 현황', '대시보드')}
+    ${pageHeader('통합 대시보드', 'JnewsBoard 실시간 운영 지표 및 활동 현황', '대시보드')}
     
     <!-- ═══ AdminLTE v4 Small Boxes Row ═══ -->
     <div class="row g-3 mb-4">

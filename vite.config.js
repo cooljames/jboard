@@ -92,14 +92,14 @@ export default defineConfig(({ mode }) => {
     }
   }
   if (process.env.DATABASE_URL) {
-    console.log('[J뉴스보드 dev] DATABASE_URL loaded — Neon Postgres mode');
+    console.log('[JnewsBoard dev] DATABASE_URL loaded — Neon Postgres mode');
   } else {
-    console.log('[J뉴스보드 dev] DATABASE_URL not set — in-memory fallback mode');
+    console.log('[JnewsBoard dev] DATABASE_URL not set — in-memory fallback mode');
   }
   if (process.env.BLOB_READ_WRITE_TOKEN) {
-    console.log('[J뉴스보드 dev] BLOB_READ_WRITE_TOKEN loaded — Vercel Blob mode');
+    console.log('[JnewsBoard dev] BLOB_READ_WRITE_TOKEN loaded — Vercel Blob mode');
   } else {
-    console.log('[J뉴스보드 dev] BLOB_READ_WRITE_TOKEN not set — DataURL fallback mode');
+    console.log('[JnewsBoard dev] BLOB_READ_WRITE_TOKEN not set — DataURL fallback mode');
   }
 
   return {

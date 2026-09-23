@@ -250,7 +250,7 @@ export function renderSettings(app) {
             <form id="settingsForm">
               <div class="mb-4">
                 <label class="form-label fw-semibold">플랫폼 명칭</label>
-                <input type="text" class="form-control" value="J뉴스보드 v4">
+                <input type="text" class="form-control" value="JnewsBoard v4">
                 <div class="form-text">헤더 및 사이드바 로고에 표시되는 플랫폼 이름입니다.</div>
               </div>
               <div class="mb-4">

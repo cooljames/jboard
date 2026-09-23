@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════
-// J뉴스보드 — Main Application Controller & Router
+// JnewsBoard — Main Application Controller & Router
 // ═══════════════════════════════════════════════════════════
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap-icons/font/bootstrap-icons.css';
