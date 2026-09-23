@@ -43,6 +43,17 @@ class JBoardApp {
     this.users = this.loadData('jboard_users', DEFAULT_USERS);
     this.categories = this.loadData('jboard_categories', DEFAULT_CATEGORIES);
 
+    // 이전 테스트용 시드 회원 정리 (@jboard.io 8종 — 실제 가입 회원은 유지)
+    const seedMemberEmails = new Set([
+      'kim@jboard.io', 'lee@jboard.io', 'park@jboard.io', 'choi@jboard.io',
+      'jung@jboard.io', 'han@jboard.io', 'kang@jboard.io', 'yoon@jboard.io'
+    ]);
+    const realMembers = this.members.filter(m => !seedMemberEmails.has(m?.email));
+    if (realMembers.length !== this.members.length) {
+      this.members = realMembers;
+      this.saveData('jboard_members', this.members);
+    }
+
     // 기존 테스트 계정 이메일 마이그레이션 (@jboard.local → @jboard.co.kr)
     const emailMigration = {
       'admin@jboard.local': 'admin@jboard.co.kr',

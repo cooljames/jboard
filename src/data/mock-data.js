@@ -10,16 +10,8 @@ export const DEFAULT_POSTS = [
   { id:5, category:'info', categoryName:'정보', title:'2026년 웹 접근성 및 성능 최적화 가이드라인', author:'정도움', authorAvatar:'https://api.dicebear.com/7.x/avataaars/svg?seed=Jung', content:'WCAG 2.2 표준 및 최신 브라우저 성능 측정 지표 체크리스트입니다.', views:670, likes:35, comments:[], createdAt:'2026-09-19 11:20', isNotice:false }
 ];
 
-export const DEFAULT_MEMBERS = [
-  { id:1, name:'김개발', email:'kim@jboard.io', role:'admin', status:'active', joinedAt:'2025-03-15', lastLogin:'2026-09-22 10:12', posts:34, avatar:'https://api.dicebear.com/7.x/avataaars/svg?seed=Kim' },
-  { id:2, name:'이프론트', email:'lee@jboard.io', role:'editor', status:'active', joinedAt:'2025-06-22', lastLogin:'2026-09-22 09:45', posts:28, avatar:'https://api.dicebear.com/7.x/avataaars/svg?seed=Lee' },
-  { id:3, name:'박백엔드', email:'park@jboard.io', role:'editor', status:'active', joinedAt:'2025-08-10', lastLogin:'2026-09-21 17:30', posts:19, avatar:'https://api.dicebear.com/7.x/avataaars/svg?seed=Park' },
-  { id:4, name:'최디자인', email:'choi@jboard.io', role:'member', status:'active', joinedAt:'2025-11-01', lastLogin:'2026-09-22 08:20', posts:12, avatar:'https://api.dicebear.com/7.x/avataaars/svg?seed=ChoiD' },
-  { id:5, name:'정도움', email:'jung@jboard.io', role:'member', status:'active', joinedAt:'2026-01-15', lastLogin:'2026-09-20 14:50', posts:8, avatar:'https://api.dicebear.com/7.x/avataaars/svg?seed=Jung' },
-  { id:6, name:'한초보', email:'han@jboard.io', role:'member', status:'inactive', joinedAt:'2026-04-20', lastLogin:'2026-08-10 11:00', posts:2, avatar:'https://api.dicebear.com/7.x/avataaars/svg?seed=Han' },
-  { id:7, name:'강매니저', email:'kang@jboard.io', role:'admin', status:'active', joinedAt:'2025-01-05', lastLogin:'2026-09-22 10:30', posts:45, avatar:'https://api.dicebear.com/7.x/avataaars/svg?seed=Kang' },
-  { id:8, name:'윤테스트', email:'yoon@jboard.io', role:'member', status:'banned', joinedAt:'2026-07-01', lastLogin:'2026-09-01 09:00', posts:0, avatar:'https://api.dicebear.com/7.x/avataaars/svg?seed=Yoon' }
-];
+// 테스트용 시드 회원은 제거 — 실제 가입/동기화된 회원만 표시
+export const DEFAULT_MEMBERS = [];
 
 export const DEFAULT_USERS = [
   { id:1, name:'관리자', email:'admin@jboard.co.kr', password:'admin1234', role:'admin', avatar:'https://api.dicebear.com/7.x/bottts/svg?seed=Admin', createdAt:'2025-01-01' },
