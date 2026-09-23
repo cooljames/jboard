@@ -47,9 +47,10 @@ export const api = {
     return await res.json();
   },
 
-  async deletePost(id) {
+  async deletePost(id, signal) {
     const res = await fetch(`${BASE_URL}/posts?id=${id}`, {
-      method: 'DELETE'
+      method: 'DELETE',
+      ...(signal ? { signal } : {})
     });
     if (!res.ok) throw new Error('게시글 삭제에 실패했습니다.');
     return await res.json();

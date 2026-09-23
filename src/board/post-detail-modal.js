@@ -219,15 +219,144 @@ export async function openDetailModal(app, id) {
   (window.bootstrap.Modal.getInstance(el) || new window.bootstrap.Modal(el)).show();
 }
 
-export async function deletePost(app, id) {
-  if (!confirm('정말 이 게시글을 삭제하시겠습니까?')) return;
-  try {
-    await api.deletePost(id);
-  } catch (e) {
-    console.warn('API delete error, deleting locally:', e);
+// 다음 페인트에 양보 — 클릭 핸들러가 네트워크를 기다리지 않고
+// 먼저 시각적 피드백을 칠 수 있게 해서 INP를 짧게 유지
+function yieldToPaint() {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => setTimeout(resolve, 0));
+  });
+}
+
+function ensurePostDeleteModal() {
+  let modalEl = document.getElementById('postDeleteConfirmModal');
+  if (!modalEl) {
+    document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal fade" id="postDeleteConfirmModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered" style="max-width:420px">
+        <div class="modal-content shadow border-0">
+          <div class="modal-header bg-danger text-white py-2">
+            <h6 class="modal-title fw-bold mb-0"><i class="bi bi-trash3 me-2"></i>게시글 삭제 확인</h6>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="닫기"></button>
+          </div>
+          <div class="modal-body p-4" id="postDeleteModalBody"></div>
+          <div class="modal-footer bg-body-tertiary py-2">
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">취소</button>
+            <button type="button" class="btn btn-danger btn-sm px-4 fw-semibold" id="confirmDeletePostBtn">
+              <i class="bi bi-trash-fill me-1"></i>삭제하기
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>`);
+    modalEl = document.getElementById('postDeleteConfirmModal');
   }
+  return modalEl;
+}
+
+// window.confirm() 대체: 메인 스레드를 막지 않는 비동기 확인.
+// 클릭 핸들러는 모달을 띄운 뒤 즉시 반환되므로 INP가 길어지지 않음.
+function confirmPostDelete(title) {
+  const modalEl = ensurePostDeleteModal();
+  const bodyEl = document.getElementById('postDeleteModalBody');
+  if (bodyEl) {
+    bodyEl.innerHTML = `
+      <div class="text-center mb-2">
+        <div class="d-inline-flex align-items-center justify-content-center bg-danger-subtle text-danger rounded-circle p-3 mb-2" style="width:56px;height:56px;">
+          <i class="bi bi-trash3 fs-4"></i>
+        </div>
+        <p class="fw-bold mb-1">이 게시글을 삭제하시겠습니까?</p>
+        <p class="text-body-secondary small text-truncate mb-0">${escapeHtml(title || '')}</p>
+      </div>
+      <p class="text-center text-body-secondary small mb-0">삭제된 게시글은 복구할 수 없습니다.</p>
+    `;
+  }
+  const confirmBtn = document.getElementById('confirmDeletePostBtn');
+  const modal = window.bootstrap.Modal.getInstance(modalEl) || new window.bootstrap.Modal(modalEl);
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = (v) => {
+      if (settled) return;
+      settled = true;
+      modalEl.removeEventListener('hidden.bs.modal', onHidden);
+      resolve(v);
+    };
+    const onHidden = () => done(false);
+    modalEl.addEventListener('hidden.bs.modal', onHidden, { once: true });
+    if (confirmBtn) {
+      confirmBtn.onclick = () => {
+        modal.hide();
+        done(true);
+      };
+    }
+    modal.show();
+  });
+}
+
+const pendingDeletes = new Set();
+
+export async function deletePost(app, id) {
+  if (pendingDeletes.has(id)) return;
+  const target = app.posts.find(p => p.id === id);
+
+  // 1. 논블로킹 확인 — 여기서 핸들러는 이미 반환되어 첫 페인트(INP)가 끝남
+  const confirmed = await confirmPostDelete(target?.title);
+  if (!confirmed) return;
+  pendingDeletes.add(id);
+
+  // 2. 즉각적인 시각 피드백 (다음 페인트 전에 동기 실행)
+  const detailDeleteBtn = document.getElementById('detailDeleteBtn');
+  const rowBtn = document.querySelector(`.btn-delete[data-id="${id}"]`);
+  const rowBtnHtml = rowBtn?.innerHTML;
+  if (detailDeleteBtn) {
+    detailDeleteBtn.disabled = true;
+    detailDeleteBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>삭제 중';
+  }
+  if (rowBtn) {
+    rowBtn.disabled = true;
+    rowBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+  }
+  showToast('삭제 중…', 'info');
+  await yieldToPaint();
+
+  // 3. 낙관적 로컬 삭제 → 즉시 리렌더 (네트워크 대기 없이 페인트)
   app.posts = app.posts.filter(p => p.id !== id);
-  app.saveData('jboard_posts', app.posts);
-  app.refreshCurrentBoard();
-  showToast('삭제됨', 'warning');
+  try {
+    app.saveData('jboard_posts', app.posts);
+  } catch (e) {
+    console.warn('local save failed:', e);
+  }
+  try {
+    app.refreshCurrentBoard();
+  } catch (e) {
+    console.warn('refresh failed:', e);
+  }
+  await yieldToPaint();
+
+  // 4. 서버 삭제는 백그라운드로 (타임아웃 8초, 실패해도 로컬 삭제 유지)
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 8000);
+  try {
+    await api.deletePost(id, ctrl.signal);
+    showToast('삭제됨', 'warning');
+  } catch (e) {
+    if (e?.name === 'AbortError') {
+      console.warn('API delete timeout, keeping local delete:', e);
+      showToast('서버 응답이 느려 로컬에서 먼저 삭제했습니다.', 'warning');
+    } else {
+      console.warn('API delete error, deleting locally:', e);
+      showToast('서버 삭제 실패 — 로컬에서 삭제했습니다.', 'warning');
+    }
+  } finally {
+    clearTimeout(timer);
+    pendingDeletes.delete(id);
+    if (detailDeleteBtn) {
+      detailDeleteBtn.disabled = false;
+      detailDeleteBtn.textContent = '삭제';
+    }
+    if (rowBtn && document.contains(rowBtn) && rowBtnHtml) {
+      rowBtn.disabled = false;
+      rowBtn.innerHTML = rowBtnHtml;
+    }
+  }
 }

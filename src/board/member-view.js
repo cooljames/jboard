@@ -313,8 +313,13 @@ export function renderBoardTable(app, container) {
   container.querySelectorAll('.btn-delete').forEach(el => {
     el.addEventListener('click', e => {
       e.preventDefault();
-      app.deletePost(parseInt(el.getAttribute('data-id')));
-    });
+      e.stopPropagation();
+      // 핸들러는 즉시 반환해야 INP가 짧아짐.
+      // 확인 모달·스피너·네트워크는 deletePost 내부에서 비동기로 처리.
+      const id = parseInt(el.getAttribute('data-id'), 10);
+      if (Number.isNaN(id)) return;
+      Promise.resolve(app.deletePost(id)).catch(err => console.warn('delete failed:', err));
+    }, { passive: false });
   });
 }
 
