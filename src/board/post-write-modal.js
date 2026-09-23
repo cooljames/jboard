@@ -99,7 +99,19 @@ export function initQuillEditor(app) {
   });
 }
 
-// 공식 Clipboard API로 HTML 주입 (innerHTML 직접 대입보다 안정적) + 주입 검증·재시도
+// 에디터 모델(Delta) 기준 내용 유무 — DOM이 보여도 모델이 비면 Quill이 정리하면서 지워버리므로 반드시 모델로 판단
+function editorModelHasContent(quill) {
+  try {
+    const ops = quill.getContents()?.ops || [];
+    const text = ops.map(o => (typeof o.insert === 'string' ? o.insert : ' ')).join('').trim();
+    return text.length > 0 || ops.some(o => o && typeof o.insert === 'object');
+  } catch {
+    return false;
+  }
+}
+
+// 공식 Clipboard API로 HTML 주입 + 모델 기준 검증·재시도
+// (DOM에만 넣으면 모델과 어긋나 입력 후 사라지므로, 모델 동기화를 보장)
 export function setEditorHtml(app, html, retries = 2) {
   const hiddenInput = document.getElementById('postContent');
   const source = html || '';
@@ -114,23 +126,46 @@ export function setEditorHtml(app, html, retries = 2) {
     } catch {}
     return true;
   }
+  // Quill에 없는 블록(hr/ul)은 사전 변환 (붙여넣기 중 소실·예외 방지)
+  const clean = String(source)
+    .replace(/<hr[^>]*>/gi, '<p><br></p>')
+    .replace(/<ul[^>]*>/gi, '')
+    .replace(/<\/ul>/gi, '')
+    .replace(/<li[^>]*>/gi, '<p>• ')
+    .replace(/<\/li>/gi, '</p>');
   try {
     app.quill.setContents([]);
-    app.quill.clipboard.dangerouslyPasteHTML(0, source, 'api');
+    app.quill.clipboard.dangerouslyPasteHTML(0, clean, 'api');
   } catch (e) {
+    console.warn('[editor] rich paste 실패, convert 시도:', e);
     try {
-      app.quill.setContents(app.quill.clipboard.convert(source));
+      app.quill.setContents(app.quill.clipboard.convert(clean));
     } catch (e2) {
-      app.quill.root.innerHTML = source;
+      console.warn('[editor] convert 실패:', e2);
+    }
+  }
+  // 모델이 비어 있으면 텍스트 추출 후 모델 우선으로 강제 주입 (DOM 직접 대입 금지)
+  if (!editorModelHasContent(app.quill)) {
+    console.warn('[editor] 모델 비어있음 → 텍스트 폴백 주입');
+    try {
+      const tmp = document.createElement('div');
+      tmp.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden;';
+      tmp.innerHTML = clean;
+      document.body.appendChild(tmp);
+      const plain = ((tmp.innerText || tmp.textContent) || '').replace(/[ \t]+\n/g, '\n').trim();
+      tmp.remove();
+      app.quill.setContents([]);
+      if (plain) app.quill.setText(plain);
+    } catch (e) {
+      console.warn('[editor] 텍스트 폴백 실패:', e);
     }
   }
   if (hiddenInput) hiddenInput.value = app.quill.root.innerHTML;
-  const injected =
-    app.quill.getText().trim().length > 0 || !!app.quill.root.querySelector('img, hr, ul, ol, table');
+  const injected = editorModelHasContent(app.quill);
   if (!injected) {
     console.warn('[editor] HTML 주입 확인 실패, 재시도 남음:', retries);
     if (retries > 0) {
-      setTimeout(() => setEditorHtml(app, source, retries - 1), 300);
+      setTimeout(() => setEditorHtml(app, source, retries - 1), 400);
     } else {
       showToast('본문 자동 입력에 실패했습니다. 내용을 직접 붙여넣어 주세요.', 'danger');
     }
