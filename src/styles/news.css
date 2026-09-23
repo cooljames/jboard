@@ -97,6 +97,20 @@
   --bs-table-hover-bg: rgba(13, 110, 253, 0.45);
 }
 
+/* Google 사이트 번역 상단 바 숨김 (고정 네비와 겹침 방지 — 되돌리기는 자체 토글 사용) */
+.goog-te-banner-frame {
+  display: none !important;
+}
+body {
+  top: 0 !important;
+}
+
+/* AI 브리핑 등록글: 소제목·문단 아래 빈줄을 정확히 1줄로 (기본 마진 제거) */
+.news-briefing-post p,
+.news-briefing-post h4 {
+  margin-bottom: 0 !important;
+}
+
 /* Post preview for AI briefing */
 .news-briefing-post h4 {
   font-size: 1.15rem;

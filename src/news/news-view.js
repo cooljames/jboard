@@ -6,7 +6,8 @@ import {
   DEFAULT_NEWS_CONFIG,
   NEWS_CONFIG_STORAGE_KEY,
 } from './constants.js';
-import { scrapeNewsArticles, translateNewsTitle, parsePubDate } from './news-service.js';
+import { scrapeNewsArticles, parsePubDate } from './news-service.js';
+import { loadSiteTranslate, setSiteLanguage, applySiteLanguage, isSiteTranslatedTo } from './site-translate.js';
 import { generateNewsAnalysis } from './gemini-agent.js';
 import { openNewsConfigModal } from './news-config-modal.js';
 import { renderNewsToolbarHtml } from './news-toolbar.js';
@@ -15,7 +16,6 @@ import {
   renderProgress,
   renderAnalysisCardHtml,
   postToJBoard,
-  downloadReport,
   openReportInNewTab,
 } from './news-analysis-view.js';
 
@@ -40,8 +40,9 @@ export class NewsDeskController {
     this.newsPageSize = 15;
     this.activeTimeFilter = null;
     this.isLoading = false;
-    this.isTranslating = false;
-    this.showTranslation = false;
+    // Google 사이트 번역 위젯 상태 (쿠키에 저장된 상태와 동기화)
+    this.showTranslation = isSiteTranslatedTo('ko');
+    this.widgetLoading = false;
     this.isAnalyzing = false;
     this.analysisProgress = { percent: 0, message: '' };
     this.latestAnalysis = null;
@@ -100,10 +101,11 @@ export class NewsDeskController {
         if (idx < 3) a.selected = true;
       });
 
-      // If US news and autoTranslateUS is enabled, turn on translation
-      if (this.country.includes('미국') && this.config.autoTranslateUS) {
-        this.showTranslation = true;
-        this.translateAllTitles();
+      // 한국 뉴스 모드에서는 번역 대상이 없으므로 켜져 있던 번역 자동 해제
+      if (this.country.includes('한국') && this.showTranslation) {
+        this.showTranslation = false;
+        setSiteLanguage('en');
+        this.updateTranslationButton();
       }
     } catch (err) {
       this.error = err.message || '뉴스를 불러오는 데 실패했습니다.';
@@ -114,64 +116,78 @@ export class NewsDeskController {
     }
   }
 
-  async translateAllTitles() {
-    if (this.isTranslating) return;
-    this.isTranslating = true;
-    this.showTranslation = true;
+  // Google 사이트 번역 위젯 켜기/끄기 (개별 문장 API 미사용 → 즉시·무제한)
+  // - 콤보 변경은 쿠키로 실제 반영을 확인하며 재시도 (한 번 클릭으로 적용)
+  async setTranslation(on) {
+    if (this.widgetLoading) return;
+    if ((this.country || '').includes('한국')) {
+      this.app?.showToast?.('한국 뉴스는 번역 없이 바로 볼 수 있습니다.', 'info');
+      return;
+    }
+    if (on === this.showTranslation) return;
+
+    this.widgetLoading = true;
+    this.updateTranslationButton();
+    const { ok, reason } = await loadSiteTranslate();
+    if (!ok) {
+      this.widgetLoading = false;
+      this.updateTranslationButton();
+      if (reason === 'script-blocked') {
+        this.app?.showToast?.('Google 번역 스크립트가 차단됐습니다. 광고 차단 확장 프로그램을 끄고 새로고침 후 다시 시도해 주세요.', 'danger');
+      } else {
+        this.app?.showToast?.('Google 번역 위젯 초기화에 실패했습니다. 새로고침 후 다시 시도해 주세요.', 'danger');
+      }
+      return;
+    }
+    const applied = await applySiteLanguage(on ? 'ko' : 'en');
+    this.widgetLoading = false;
+    if (applied) {
+      this.showTranslation = on;
+      this.app?.showToast?.(on ? 'Google 사이트 번역이 적용되었습니다.' : '원문으로 전환되었습니다.', 'success');
+    } else {
+      this.app?.showToast?.(on ? '번역 적용에 실패했습니다. 다시 시도해 주세요.' : '원문 복원에 실패했습니다. 다시 시도해 주세요.', 'warning');
+    }
     this.updateTranslationButton();
     this.renderStatus();
-
-    try {
-      for (const a of this.articles) {
-        if (!a.translatedTitle) {
-          a.translatedTitle = await translateNewsTitle(a.title);
-        }
-      }
-    } catch (e) {
-      console.warn('Translation error:', e);
-    } finally {
-      this.isTranslating = false;
-      renderNewsArticleList(this);
-      this.updateTranslationButton();
-      this.renderStatus();
-    }
-  }
-
-  async toggleTranslation() {
-    if (this.isTranslating) return;
-    this.showTranslation = !this.showTranslation;
-
-    if (this.showTranslation) {
-      const needsTranslation = this.articles.some((a) => !a.translatedTitle);
-      if (needsTranslation) {
-        await this.translateAllTitles();
-      } else {
-        renderNewsArticleList(this);
-        this.updateTranslationButton();
-      }
-    } else {
-      renderNewsArticleList(this);
-      this.updateTranslationButton();
-    }
   }
 
   updateTranslationButton() {
-    const btn = document.getElementById('exactBtnTranslateUS');
-    if (!btn) return;
-    if (this.isTranslating) {
-      btn.className = 'btn btn-sm btn-warning text-dark fw-semibold shadow-sm d-inline-flex align-items-center gap-1';
-      btn.disabled = true;
-      btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span><span>번역 중...</span>`;
+    const koBtn = document.getElementById('exactBtnTranslateKO');
+    const enBtn = document.getElementById('exactBtnTranslateEN');
+    if (!koBtn || !enBtn) return;
+    // 한국 뉴스 모드에서는 번역 대상이 없으므로 토글 비활성화
+    if ((this.country || '').includes('한국')) {
+      koBtn.disabled = true;
+      enBtn.disabled = true;
+      koBtn.className = 'btn btn-sm btn-outline-primary fw-semibold d-inline-flex align-items-center gap-1 opacity-50';
+      koBtn.title = '한국 뉴스는 번역 없이 바로 볼 수 있습니다';
+      koBtn.innerHTML = `<i class="bi bi-translate"></i><span>한글 번역</span>`;
+      enBtn.className = 'btn btn-sm btn-outline-secondary fw-semibold d-inline-flex align-items-center gap-1 opacity-50';
+      enBtn.title = '한국 뉴스는 번역 없이 바로 볼 수 있습니다';
+      enBtn.innerHTML = `<i class="bi bi-check-circle-fill"></i><span>원문 보기</span>`;
+      return;
+    }
+    koBtn.disabled = this.widgetLoading;
+    enBtn.disabled = this.widgetLoading;
+    if (this.widgetLoading) {
+      koBtn.className = 'btn btn-sm btn-warning text-dark fw-semibold d-inline-flex align-items-center gap-1';
+      koBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span><span>번역 준비 중...</span>`;
+      enBtn.className = 'btn btn-sm btn-outline-secondary fw-semibold d-inline-flex align-items-center gap-1';
+      enBtn.innerHTML = `<i class="bi bi-check-circle-fill"></i><span>원문 보기</span>`;
     } else if (this.showTranslation) {
-      btn.className = 'btn btn-sm btn-success fw-semibold shadow-sm d-inline-flex align-items-center gap-1';
-      btn.disabled = false;
-      btn.title = '클릭 시 원문으로 전환합니다';
-      btn.innerHTML = `<i class="bi bi-check-circle-fill"></i><span>번역 켜짐 (원문 보기)</span>`;
+      koBtn.className = 'btn btn-sm btn-primary fw-semibold d-inline-flex align-items-center gap-1';
+      koBtn.title = '한글 번역 적용 중';
+      koBtn.innerHTML = `<i class="bi bi-translate"></i><span>한글 번역</span>`;
+      enBtn.className = 'btn btn-sm btn-outline-secondary fw-semibold d-inline-flex align-items-center gap-1';
+      enBtn.title = '원문으로 전환합니다';
+      enBtn.innerHTML = `<i class="bi bi-check-circle-fill"></i><span>원문 보기</span>`;
     } else {
-      btn.className = 'btn btn-sm btn-outline-primary fw-semibold d-inline-flex align-items-center gap-1';
-      btn.disabled = false;
-      btn.title = '클릭 시 한글로 번역합니다';
-      btn.innerHTML = `<i class="bi bi-translate"></i><span>한글 번역</span>`;
+      koBtn.className = 'btn btn-sm btn-outline-primary fw-semibold d-inline-flex align-items-center gap-1';
+      koBtn.title = 'Google 사이트 번역으로 한글로 봅니다';
+      koBtn.innerHTML = `<i class="bi bi-translate"></i><span>한글 번역</span>`;
+      enBtn.className = 'btn btn-sm btn-secondary fw-semibold d-inline-flex align-items-center gap-1';
+      enBtn.title = '원문 보기 상태입니다';
+      enBtn.innerHTML = `<i class="bi bi-check-circle-fill"></i><span>원문 보기</span>`;
     }
   }
 
@@ -210,7 +226,7 @@ export class NewsDeskController {
     this.app?.showToast?.(`[${filterObj.label}] 기준 ${matchedCount}개 기사가 선택되었습니다.`, 'info');
   }
 
-  async runAiAnalysis(autoDownload = false) {
+  async runAiAnalysis() {
     if (!this.apiKey) {
       openNewsConfigModal(this);
       this.app?.showToast?.('Gemini API 키를 먼저 입력하고 저장해 주세요.', 'warning');
@@ -243,10 +259,6 @@ export class NewsDeskController {
 
       this.latestAnalysis = result;
       this.app?.showToast?.('AI 심층 뉴스 브리핑이 성공적으로 생성되었습니다!', 'success');
-
-      if (autoDownload) {
-        downloadReport(this);
-      }
     } catch (err) {
       this.app?.showToast?.(err.message || 'AI 분석 중 오류가 발생했습니다.', 'danger');
     } finally {
@@ -264,10 +276,6 @@ export class NewsDeskController {
       el.innerHTML = '<span class="spinner-border spinner-border-sm text-primary me-2"></span>구글 뉴스 RSS 피드를 수집하는 중...';
       return;
     }
-    if (this.isTranslating) {
-      el.innerHTML = '<span class="spinner-border spinner-border-sm text-info me-2"></span>영문 기사 헤드라인 번역 중...';
-      return;
-    }
     if (this.error) {
       el.innerHTML = `<span class="text-danger"><i class="bi bi-exclamation-triangle-fill me-1"></i>${this.error}</span>`;
       return;
@@ -283,7 +291,7 @@ export class NewsDeskController {
       ${renderNewsToolbarHtml(this)}
 
       <!-- Progress Bar Area -->
-      <div id="aiProgressContainer" class="card shadow-sm border-0 mb-3 bg-body p-3 rounded-3 ${this.isAnalyzing ? '' : 'd-none'}">
+      <div id="aiProgressContainer" class="card shadow-sm border-0 mb-3 bg-body p-3 rounded-3 notranslate ${this.isAnalyzing ? '' : 'd-none'}" translate="no">
         <div class="progress" style="height: 10px; border-radius: 6px;">
           <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" id="aiProgressBar" role="progressbar" style="width: 0%"></div>
         </div>
@@ -304,6 +312,11 @@ export class NewsDeskController {
     renderNewsArticleList(this);
     renderProgress(this);
     this.bindEvents();
+    this.updateTranslationButton();
+    // 쿠키는 번역 상태인데 위젯이 없으면(새로고침 직후) 백그라운드로 미리 로드
+    if (this.showTranslation && !document.querySelector('.goog-te-combo') && !this.widgetLoading) {
+      loadSiteTranslate().then(() => this.updateTranslationButton());
+    }
   }
 
   bindEvents() {
@@ -385,8 +398,9 @@ export class NewsDeskController {
       });
     });
 
-    // Translation toggle button
-    document.getElementById('exactBtnTranslateUS')?.addEventListener('click', () => this.toggleTranslation());
+    // Translation segmented toggle: 한글 번역 | 원문 보기
+    document.getElementById('exactBtnTranslateKO')?.addEventListener('click', () => this.setTranslation(true));
+    document.getElementById('exactBtnTranslateEN')?.addEventListener('click', () => this.setTranslation(false));
 
     // Summary Toggle Buttons
     this.container.querySelectorAll('[data-summary-val]').forEach((btn) => {
@@ -410,11 +424,10 @@ export class NewsDeskController {
         this.app.navigate('signup');
         return;
       }
-      this.runAiAnalysis(true);
+      this.runAiAnalysis();
     });
     document.getElementById('exactBtnOpenReport')?.addEventListener('click', () => openReportInNewTab(this));
     document.getElementById('postToJBoardBtn')?.addEventListener('click', () => postToJBoard(this));
-    document.getElementById('downloadHtmlBtn')?.addEventListener('click', () => downloadReport(this));
     document.getElementById('viewNewTabBtn')?.addEventListener('click', () => openReportInNewTab(this));
   }
 }

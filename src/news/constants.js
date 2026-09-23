@@ -67,7 +67,6 @@ export const DEFAULT_NEWS_CONFIG = {
   summaryLines: '5줄',
   modelId: 'gemini-3.1-flash-lite',
   apiKey: '',
-  autoTranslateUS: true,
 };
 
 export const NEWS_CONFIG_STORAGE_KEY = 'jboard_news_config';

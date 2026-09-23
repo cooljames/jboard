@@ -43,6 +43,20 @@ class JBoardApp {
     this.users = this.loadData('jboard_users', DEFAULT_USERS);
     this.categories = this.loadData('jboard_categories', DEFAULT_CATEGORIES);
 
+    // 기존 테스트 계정 이메일 마이그레이션 (@jboard.local → @jboard.co.kr)
+    const emailMigration = {
+      'admin@jboard.local': 'admin@jboard.co.kr',
+      'user@jboard.local': 'user@jboard.co.kr'
+    };
+    let migrated = false;
+    this.users.forEach(u => {
+      if (u && emailMigration[u.email]) {
+        u.email = emailMigration[u.email];
+        migrated = true;
+      }
+    });
+    if (migrated) this.saveData('jboard_users', this.users);
+
     // Ensure default users exist
     DEFAULT_USERS.forEach(du => {
       if (!this.users.some(u => u.email === du.email)) {
@@ -54,6 +68,17 @@ class JBoardApp {
     upgradeLocalPasswordStore(this.users, (k, d) => this.saveData(k, d));
 
     this.currentUser = this.loadData('jboard_currentUser', null);
+    // 로그인 유지 중인 계정도 새 이메일로 동기화
+    if (this.currentUser) {
+      const emailMigration = {
+        'admin@jboard.local': 'admin@jboard.co.kr',
+        'user@jboard.local': 'user@jboard.co.kr'
+      };
+      if (emailMigration[this.currentUser.email]) {
+        this.currentUser.email = emailMigration[this.currentUser.email];
+        this.saveData('jboard_currentUser', this.currentUser);
+      }
+    }
     this.currentPage = 'home';
     this.adminPage = 'dashboard';
     this.memberTab = 'news';

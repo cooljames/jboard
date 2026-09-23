@@ -8,26 +8,38 @@ export function initQuillEditor(app) {
   const container = document.getElementById('quillEditorContainer');
   if (!container) return;
 
+  // 기존 에디터 잔재 정리 후 재생성 (중복 초기화 방지)
+  try {
+    app.quill?.off?.('text-change');
+  } catch {}
+  app.quill = null;
   const oldToolbar = container.parentElement.querySelector('.ql-toolbar');
   if (oldToolbar) oldToolbar.remove();
 
   container.innerHTML = '';
 
-  app.quill = new window.Quill(container, {
-    theme: 'snow',
-    placeholder: '게시글 내용을 자유롭게 작성하세요. (스크린샷이나 이미지를 Ctrl+V로 붙여넣을 수 있습니다)',
-    modules: {
-      toolbar: [
-        [{ header: [1, 2, 3, false] }],
-        ['bold', 'italic', 'underline', 'strike'],
-        ['blockquote', 'code-block'],
-        [{ list: 'ordered' }, { list: 'bullet' }],
-        [{ color: [] }, { background: [] }],
-        ['link', 'image'],
-        ['clean']
-      ]
-    }
-  });
+  try {
+    app.quill = new window.Quill(container, {
+      theme: 'snow',
+      placeholder: '게시글 내용을 자유롭게 작성하세요. (스크린샷이나 이미지를 Ctrl+V로 붙여넣을 수 있습니다)',
+      modules: {
+        toolbar: [
+          [{ header: [1, 2, 3, false] }],
+          ['bold', 'italic', 'underline', 'strike'],
+          ['blockquote', 'code-block'],
+          [{ list: 'ordered' }, { list: 'bullet' }],
+          [{ color: [] }, { background: [] }],
+          ['link', 'image'],
+          ['clean']
+        ]
+      }
+    });
+  } catch (err) {
+    console.error('[editor] Quill 초기화 실패:', err);
+    app.quill = null;
+    showToast('에디터 초기화에 실패했습니다. 페이지를 새로고침해 주세요.', 'danger');
+    return;
+  }
 
   app.quill.on('text-change', () => {
     const hiddenInput = document.getElementById('postContent');
@@ -85,6 +97,45 @@ export function initQuillEditor(app) {
     };
     fileInput.click();
   });
+}
+
+// 공식 Clipboard API로 HTML 주입 (innerHTML 직접 대입보다 안정적) + 주입 검증·재시도
+export function setEditorHtml(app, html, retries = 2) {
+  const hiddenInput = document.getElementById('postContent');
+  const source = html || '';
+  if (hiddenInput) hiddenInput.value = source;
+  if (!app.quill) {
+    console.warn('[editor] Quill 인스턴스 없음 — hidden input에만 보관');
+    return false;
+  }
+  if (!source) {
+    try {
+      app.quill.setContents([]);
+    } catch {}
+    return true;
+  }
+  try {
+    app.quill.setContents([]);
+    app.quill.clipboard.dangerouslyPasteHTML(0, source, 'api');
+  } catch (e) {
+    try {
+      app.quill.setContents(app.quill.clipboard.convert(source));
+    } catch (e2) {
+      app.quill.root.innerHTML = source;
+    }
+  }
+  if (hiddenInput) hiddenInput.value = app.quill.root.innerHTML;
+  const injected =
+    app.quill.getText().trim().length > 0 || !!app.quill.root.querySelector('img, hr, ul, ol, table');
+  if (!injected) {
+    console.warn('[editor] HTML 주입 확인 실패, 재시도 남음:', retries);
+    if (retries > 0) {
+      setTimeout(() => setEditorHtml(app, source, retries - 1), 300);
+    } else {
+      showToast('본문 자동 입력에 실패했습니다. 내용을 직접 붙여넣어 주세요.', 'danger');
+    }
+  }
+  return injected;
 }
 
 export function setupDropzone(app) {
@@ -240,16 +291,17 @@ export function openPostWriteModal(app, editId = null, initialData = null) {
     initQuillEditor(app);
     if (app.quill) {
       if (editPost) {
-        app.quill.root.innerHTML = editPost.content || '';
+        setEditorHtml(app, editPost.content || '');
       } else if (initialData?.content) {
-        app.quill.root.innerHTML = initialData.content;
-        const hiddenContent = document.getElementById('postContent');
-        if (hiddenContent) hiddenContent.value = initialData.content;
+        setEditorHtml(app, initialData.content);
       } else {
-        app.quill.setContents([]);
-        const hiddenContent = document.getElementById('postContent');
-        if (hiddenContent) hiddenContent.value = '';
+        setEditorHtml(app, '');
       }
+    } else {
+      // 에디터 초기화 실패 시에도 hidden input에 본문 보관 (저장 폴백용)
+      const hiddenContent = document.getElementById('postContent');
+      if (hiddenContent) hiddenContent.value = editPost?.content || initialData?.content || '';
+      showToast('에디터 초기화에 실패했습니다. 페이지를 새로고침해 주세요.', 'danger');
     }
     app.attachedFiles = editPost && editPost.attachments ? structuredClone(editPost.attachments) : [];
     renderAttachedFilesList(app);
@@ -264,8 +316,12 @@ export async function handleCreatePost(app) {
   const catN = document.getElementById('postCategory').selectedOptions[0].text;
   const notice = document.getElementById('postIsNotice').checked;
 
-  const content = app.quill ? app.quill.root.innerHTML : document.getElementById('postContent').value.trim();
-  const textContent = app.quill ? app.quill.getText().trim() : content;
+  // 에디터·hidden input 중 비어 있지 않은 쪽을 우선 사용 (본문 유실 방지)
+  const quillHtml = app.quill ? app.quill.root.innerHTML : '';
+  const quillText = app.quill ? app.quill.getText().trim() : '';
+  const hiddenVal = document.getElementById('postContent').value || '';
+  const content = quillText ? quillHtml : (hiddenVal.trim() ? hiddenVal : quillHtml);
+  const textContent = (quillText || hiddenVal.replace(/<[^>]*>?/gm, '')).trim();
 
   if (!title || !author || (!textContent && !content.includes('<img'))) {
     alert('제목, 작성자, 본문 내용을 모두 입력하세요.');
@@ -290,7 +346,7 @@ export async function handleCreatePost(app) {
     }
 
     const finalTitle = notice ? `📢 ${title}` : title;
-    const authorEmail = app.currentUser ? app.currentUser.email : 'guest@jboard.local';
+    const authorEmail = app.currentUser ? app.currentUser.email : 'guest@jboard.co.kr';
     const editId = document.getElementById('postWriteForm').dataset.editId;
 
     if (editId) {

@@ -76,8 +76,8 @@ export async function initDb() {
       await sql`
         INSERT INTO jboard_users (name, email, password, role, status)
         VALUES
-          ('관리자', 'admin@jboard.local', ${hashPassword('admin1234')}, 'admin', 'active'),
-          ('일반회원', 'user@jboard.local', ${hashPassword('user1234')}, 'member', 'active');
+          ('관리자', 'admin@jboard.co.kr', ${hashPassword('admin1234')}, 'admin', 'active'),
+          ('일반회원', 'user@jboard.co.kr', ${hashPassword('user1234')}, 'member', 'active');
       `;
     }
 
@@ -87,9 +87,9 @@ export async function initDb() {
       await sql`
         INSERT INTO posts (title, category, author, author_email, content, views, likes, comments_count, attachments)
         VALUES 
-          ('[공지] J뉴스보드 AdminLTE v4 및 Vercel 클라우드 시스템 오픈', '공지', '관리자', 'admin@jboard.local', '<p>안녕하세요! <strong>J뉴스보드 v4</strong>에 오신 것을 환영합니다.</p><p>Neon Postgres 및 Vercel Blob 스토리지, Quill 리치 텍스트 에디터가 연동된 정통 엔터프라이즈 게시판입니다.</p>', 128, 15, 2, '[]'::jsonb),
-          ('Vercel Blob과 Neon Postgres를 활용한 모던 아키텍처', '기술', '일반회원', 'user@jboard.local', '<p>서버리스 환경에서 빠른 쿼리와 안정적인 이미지 업로드 파이프라인을 구축하는 팁을 공유합니다.</p>', 85, 9, 1, '[]'::jsonb),
-          ('Quill 에디터에서 스크린샷 이미지 붙여넣기 팁', '정보', '관리자', 'admin@jboard.local', '<p>에디터 본문에서 캡처한 이미지를 <code>Ctrl + V</code>로 바로 붙여넣으면 고성능 Blob CDN에 실시간 업로드됩니다.</p>', 64, 7, 0, '[]'::jsonb);
+          ('[공지] J뉴스보드 AdminLTE v4 및 Vercel 클라우드 시스템 오픈', '공지', '관리자', 'admin@jboard.co.kr', '<p>안녕하세요! <strong>J뉴스보드 v4</strong>에 오신 것을 환영합니다.</p><p>Neon Postgres 및 Vercel Blob 스토리지, Quill 리치 텍스트 에디터가 연동된 정통 엔터프라이즈 게시판입니다.</p>', 128, 15, 2, '[]'::jsonb),
+          ('Vercel Blob과 Neon Postgres를 활용한 모던 아키텍처', '기술', '일반회원', 'user@jboard.co.kr', '<p>서버리스 환경에서 빠른 쿼리와 안정적인 이미지 업로드 파이프라인을 구축하는 팁을 공유합니다.</p>', 85, 9, 1, '[]'::jsonb),
+          ('Quill 에디터에서 스크린샷 이미지 붙여넣기 팁', '정보', '관리자', 'admin@jboard.co.kr', '<p>에디터 본문에서 캡처한 이미지를 <code>Ctrl + V</code>로 바로 붙여넣으면 고성능 Blob CDN에 실시간 업로드됩니다.</p>', 64, 7, 0, '[]'::jsonb);
       `;
     }
 

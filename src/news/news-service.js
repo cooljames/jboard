@@ -80,58 +80,135 @@ function parseGoogleTranslateResponse(raw) {
   return '';
 }
 
-export async function translateText(text, from = 'en', to = 'ko') {
-  if (!text || !text.trim()) return '';
-  
-  // 1. Try internal /api/translate
+async function fetchWithTimeout(url, ms = 10000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
   try {
-    const res = await fetch(`/api/translate?text=${encodeURIComponent(text)}&from=${from}&to=${to}`);
-    if (res.ok) {
-      const textData = await res.text();
-      const parsed = parseGoogleTranslateResponse(textData);
-      if (parsed) return parsed;
-    }
-  } catch (e) {
-    // fallback
+    return await fetch(url, { signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
   }
-
-  // 2. Try direct Google translate GTX
-  try {
-    const directUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${from}&tl=${to}&dt=t&q=${encodeURIComponent(text)}`;
-    const resp = await fetch(directUrl);
-    if (resp.ok) {
-      const textData = await resp.text();
-      const parsed = parseGoogleTranslateResponse(textData);
-      if (parsed) return parsed;
-    }
-  } catch (e) {
-    // fallback
-  }
-
-  return text;
 }
 
-/**
- * 미국 뉴스 제목 번역:
- * 구글 뉴스 RSS의 '제목 - 언론사명' 형태에서 언론사명 오번역을 방지하고
- * 순수 기사 헤드라인만 번역한 뒤 언론사명을 유지하여 반환합니다.
- */
-export async function translateNewsTitle(rawTitle) {
-  if (!rawTitle || !rawTitle.trim()) return '';
-  const lastDashIndex = rawTitle.lastIndexOf(' - ');
-  if (lastDashIndex !== -1) {
-    const headline = rawTitle.substring(0, lastDashIndex).trim();
-    const source = rawTitle.substring(lastDashIndex + 3).trim();
-    if (headline) {
-      const translatedHeadline = await translateText(headline, 'en', 'ko');
-      if (translatedHeadline && !translatedHeadline.startsWith('<')) {
-        return source ? `${translatedHeadline} - ${source}` : translatedHeadline;
-      }
-      return rawTitle;
+// Google GTX 원시 응답 요청 (/api/translate → 직접 호출 순). 실패 시 null.
+async function requestGtxRaw(text, from, to) {
+  try {
+    const res = await fetchWithTimeout(`/api/translate?text=${encodeURIComponent(text)}&from=${from}&to=${to}`);
+    if (res.ok) return await res.text();
+    console.warn(`[translate] /api/translate responded ${res.status}`);
+  } catch (e) {
+    console.warn('[translate] /api/translate failed:', e?.name || e);
+  }
+
+  try {
+    const directUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${from}&tl=${to}&dt=t&q=${encodeURIComponent(text)}`;
+    const resp = await fetchWithTimeout(directUrl);
+    if (resp.ok) return await resp.text();
+    console.warn(`[translate] direct GTX responded ${resp.status}`);
+  } catch (e) {
+    console.warn('[translate] direct GTX failed:', e?.name || e);
+  }
+
+  return null;
+}
+
+function decodeHtmlEntities(s) {
+  return (s || '')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
+}
+
+// 번역 캐시 (반복 조회 시 무료 API 쿼터 절약) — localStorage 영속, 최대 500건
+const TRANSLATION_CACHE_KEY = 'jboard_news_translations';
+const translationCache = new Map();
+try {
+  const saved = JSON.parse(localStorage.getItem(TRANSLATION_CACHE_KEY) || '[]');
+  if (Array.isArray(saved)) {
+    saved.slice(-500).forEach(([k, v]) => {
+      if (k && v) translationCache.set(k, v);
+    });
+  }
+} catch {}
+function cacheSet(key, value) {
+  if (!key || !value) return;
+  translationCache.set(key, value);
+  if (translationCache.size > 500) {
+    translationCache.delete(translationCache.keys().next().value);
+  }
+  try {
+    localStorage.setItem(TRANSLATION_CACHE_KEY, JSON.stringify([...translationCache].slice(-500)));
+  } catch {}
+}
+
+// MyMemory 일일 무료 한도 소진 감지 (감지 후 6시간 동안 추가 요청 자제)
+let quotaExhaustedAt = 0;
+export function isTranslationQuotaExhausted() {
+  return Date.now() - quotaExhaustedAt < 6 * 3600 * 1000;
+}
+function markQuotaExhausted() {
+  quotaExhaustedAt = Date.now();
+}
+
+// 번역문 품질 검사 (TM 쓰레기·원문 에코 방지)
+function isGoodTranslation(t, source, to) {
+  const s = (source || '').trim();
+  if (!t || !s) return false;
+  if (t === s || t.startsWith('<')) return false;
+  if (/MYMEMORY WARNING/i.test(t)) return false;
+  if (to === 'ko') {
+    if (!/[가-힣]/.test(t)) return false;
+    if (s.length > 8 && t.includes(s)) return false;
+  }
+  return true;
+}
+
+// 번역 실패 시 '' 반환 (호출자가 원문 유지 여부를 판단). 원문을 그대로 반환하지 않음.
+export async function translateText(text, from = 'en', to = 'ko') {
+  if (!text || !text.trim()) return '';
+  const source = text.trim();
+
+  const cacheKey = `${from}>${to}:${source}`;
+  const cached = translationCache.get(cacheKey);
+  if (cached) return cached;
+
+  const raw = await requestGtxRaw(source, from, to);
+  if (raw != null) {
+    const parsed = parseGoogleTranslateResponse(raw);
+    if (isGoodTranslation(parsed, source, to)) {
+      cacheSet(cacheKey, parsed);
+      return parsed;
     }
   }
-  const translated = await translateText(rawTitle, 'en', 'ko');
-  return (translated && !translated.startsWith('<')) ? translated : rawTitle;
+
+  // 3. MyMemory 무료 API 폴백 (CORS 허용, 쿼리 500자 이하 권장)
+  if (!isTranslationQuotaExhausted()) {
+    try {
+      const mmUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(source)}&langpair=${from}|${to}`;
+      const mmRes = await fetchWithTimeout(mmUrl);
+      if (mmRes.ok) {
+        const mmJson = await mmRes.json();
+        if (mmJson?.quotaFinished === true) {
+          markQuotaExhausted();
+          console.warn('[translate] MyMemory daily quota finished');
+        } else {
+          const t = decodeHtmlEntities(mmJson?.responseData?.translatedText || '').trim();
+          if (mmJson?.responseStatus === 200 && isGoodTranslation(t, source, to)) {
+            cacheSet(cacheKey, t);
+            return t;
+          }
+        }
+      } else {
+        console.warn(`[translate] MyMemory responded ${mmRes.status}`);
+      }
+    } catch (e) {
+      console.warn('[translate] MyMemory failed:', e?.name || e);
+    }
+  }
+
+  return '';
 }
 
 // ── XML Parsing ──
@@ -250,9 +327,10 @@ export async function scrapeNewsArticles(
 
   let finalQuery = buildSearchQuery(query, searchMode);
 
-  // 미국 뉴스인데 한글 검색어 입력 시 영문으로 자동 번역
+  // 미국 뉴스인데 한글 검색어 입력 시 영문으로 자동 번역 (실패 시 원본 쿼리 유지)
   if (country.includes('미국') && finalQuery.match(/[가-힣]/)) {
-    finalQuery = await translateText(finalQuery, 'ko', 'en');
+    const translatedQuery = await translateText(finalQuery, 'ko', 'en');
+    if (translatedQuery) finalQuery = translatedQuery;
   }
 
   const baseUrl = 'https://news.google.com';

@@ -5,7 +5,7 @@ let fallbackUsers = [
   {
     id: 1,
     name: '관리자',
-    email: 'admin@jboard.local',
+    email: 'admin@jboard.co.kr',
     password: 'admin1234',
     role: 'admin',
     status: 'active',
@@ -14,7 +14,7 @@ let fallbackUsers = [
   {
     id: 2,
     name: '일반회원',
-    email: 'user@jboard.local',
+    email: 'user@jboard.co.kr',
     password: 'user1234',
     role: 'member',
     status: 'active',

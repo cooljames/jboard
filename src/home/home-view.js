@@ -11,7 +11,7 @@ export function renderPublicLanding(app) {
 
   app.appRoot.innerHTML = `
   <!-- ═══ Navbar ═══ -->
-  <nav class="pub-navbar">
+  <nav class="pub-navbar notranslate" translate="no">
     <div class="container-fluid px-3 px-xl-5">
       <div class="d-flex align-items-center justify-content-between py-2">
         <a href="#" class="d-flex align-items-center gap-2 text-decoration-none" data-nav="home">
@@ -182,7 +182,7 @@ export function renderPublicLanding(app) {
   </section>
 
   <!-- ═══ Footer ═══ -->
-  <footer class="pub-footer bg-body border-top py-4">
+  <footer class="pub-footer bg-body border-top py-4 notranslate" translate="no">
     <div class="container-fluid px-3 px-xl-5">
       <div class="row g-4">
         <div class="col-md-4">
@@ -231,7 +231,7 @@ export function renderPublicLanding(app) {
 export function renderPublicNews(app) {
   app.appRoot.innerHTML = `
   <!-- ═══ Public Navbar ═══ -->
-  <nav class="pub-navbar">
+  <nav class="pub-navbar notranslate" translate="no">
     <div class="container-fluid px-3 px-xl-5">
       <div class="d-flex align-items-center justify-content-between py-2">
         <div class="d-flex align-items-center gap-3">
@@ -275,7 +275,7 @@ export function renderPublicNews(app) {
   </main>
 
   <!-- Footer -->
-  <footer class="pub-footer bg-body border-top py-4 mt-4">
+  <footer class="pub-footer bg-body border-top py-4 mt-4 notranslate" translate="no">
     <div class="container-fluid px-3 px-xl-5 text-center text-body-secondary small">
       © 2026 J뉴스보드 Project. 실시간 구글 뉴스 & Gemini AI 에이전트.
     </div>

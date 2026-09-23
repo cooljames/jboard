@@ -8,7 +8,7 @@ export function renderNewsToolbarHtml(ctrl) {
 
   return `
     <!-- ═══ Filter & Search Bar with Merged [뉴스 설정] & [새로고침] on Row 1 (Item 1) ═══ -->
-    <div class="card shadow-sm border-0 mb-3 bg-body rounded-3">
+    <div class="card shadow-sm border-0 mb-3 bg-body rounded-3 notranslate" translate="no">
       <div class="card-body p-3">
         <!-- 1. Country & Category Badges Row + Merged Buttons on the Right -->
         <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
@@ -77,7 +77,7 @@ export function renderNewsToolbarHtml(ctrl) {
     </div>
 
     <!-- ═══ Bootstrap 5.0 Unified Controls Card ═══ -->
-    <div class="card shadow-sm border-0 mb-3 bg-body rounded-3">
+    <div class="card shadow-sm border-0 mb-3 bg-body rounded-3 notranslate" translate="no">
       <div class="card-body p-3">
         <!-- Row 1: 선택 제어, 시간 필터, 요약 선택 (한 행 통합 배치), 번역 토글 버튼 -->
         <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 pb-2 mb-2 border-bottom">
@@ -117,33 +117,25 @@ export function renderNewsToolbarHtml(ctrl) {
             </div>
           </div>
 
-          <!-- 번역 버튼 (토글 방식으로 색상과 텍스트 변경) -->
+          <!-- Google 사이트 번역 토글: 한글 번역 | 원문 보기 (상태는 렌더 후 updateTranslationButton 동기화) -->
           <div class="d-flex align-items-center ms-auto">
-            ${ctrl.isTranslating ? `
-              <button type="button" class="btn btn-sm btn-warning text-dark fw-semibold shadow-sm d-inline-flex align-items-center gap-1" id="exactBtnTranslateUS" disabled>
-                <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
-                <span>번역 중...</span>
+            <div class="btn-group btn-group-sm shadow-sm" role="group" aria-label="번역 토글">
+              <button type="button" class="btn btn-outline-primary fw-semibold d-inline-flex align-items-center gap-1" id="exactBtnTranslateKO" title="Google 사이트 번역으로 한글로 봅니다">
+                <i class="bi bi-translate"></i><span>한글 번역</span>
               </button>
-            ` : ctrl.showTranslation ? `
-              <button type="button" class="btn btn-sm btn-success fw-semibold shadow-sm d-inline-flex align-items-center gap-1" id="exactBtnTranslateUS" title="클릭 시 원문으로 전환합니다">
-                <i class="bi bi-check-circle-fill"></i>
-                <span>번역 켜짐 (원문 보기)</span>
+              <button type="button" class="btn btn-secondary fw-semibold d-inline-flex align-items-center gap-1" id="exactBtnTranslateEN" title="원문으로 전환합니다">
+                <i class="bi bi-check-circle-fill"></i><span>원문 보기</span>
               </button>
-            ` : `
-              <button type="button" class="btn btn-sm btn-outline-primary fw-semibold d-inline-flex align-items-center gap-1" id="exactBtnTranslateUS" title="클릭 시 한글로 번역합니다">
-                <i class="bi bi-translate"></i>
-                <span>한글 번역</span>
-              </button>
-            `}
+            </div>
           </div>
         </div>
 
-        <!-- Row 2: 기사 분석 & 저장, 보고서 열어보기, 실시간 기사 수 및 선택 카운트 -->
+        <!-- Row 2: 기사 분석, 보고서 열어보기, 실시간 기사 수 및 선택 카운트 -->
         <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
           <div class="d-flex flex-wrap align-items-center gap-2">
-            <button type="button" class="btn btn-primary btn-sm px-3 fw-bold shadow-sm d-inline-flex align-items-center gap-2" id="exactBtnAnalyzeSave" ${ctrl.isAnalyzing ? 'disabled' : ''}>
+            <button type="button" class="btn btn-success btn-sm px-3 fw-bold shadow-sm d-inline-flex align-items-center gap-2" id="exactBtnAnalyzeSave" ${ctrl.isAnalyzing ? 'disabled' : ''}>
               <i class="bi bi-bar-chart-fill"></i>
-              <span>${ctrl.isAnalyzing ? '선택된 기사 분석 및 파일 저장 중...' : '선택된 기사 분석하여 파일 저장'}</span>
+              <span>${ctrl.isAnalyzing ? '선택된 기사 분석 중...' : '선택된 기사 분석하기'}</span>
             </button>
             <button type="button" class="btn btn-dark btn-sm px-3 fw-semibold shadow-sm d-inline-flex align-items-center gap-1" id="exactBtnOpenReport">
               <i class="bi bi-box-arrow-up-right me-1"></i>열어보기

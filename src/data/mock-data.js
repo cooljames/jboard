@@ -22,8 +22,8 @@ export const DEFAULT_MEMBERS = [
 ];
 
 export const DEFAULT_USERS = [
-  { id:1, name:'관리자', email:'admin@jboard.local', password:'admin1234', role:'admin', avatar:'https://api.dicebear.com/7.x/bottts/svg?seed=Admin', createdAt:'2025-01-01' },
-  { id:2, name:'일반회원', email:'user@jboard.local', password:'user1234', role:'member', avatar:'https://api.dicebear.com/7.x/avataaars/svg?seed=User', createdAt:'2026-01-01' }
+  { id:1, name:'관리자', email:'admin@jboard.co.kr', password:'admin1234', role:'admin', avatar:'https://api.dicebear.com/7.x/bottts/svg?seed=Admin', createdAt:'2025-01-01' },
+  { id:2, name:'일반회원', email:'user@jboard.co.kr', password:'user1234', role:'member', avatar:'https://api.dicebear.com/7.x/avataaars/svg?seed=User', createdAt:'2026-01-01' }
 ];
 
 export const DEFAULT_CATEGORIES = [

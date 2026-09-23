@@ -63,5 +63,5 @@ npm run dev
 ## 🔑 테스트 계정 안내
 
 로그인 화면 하단의 **[선택]** 버튼을 클릭하면 원클릭으로 자동 입력됩니다:
-- **관리자 계정**: `admin@jboard.local` / `admin1234`
-- **일반회원 계정**: `user@jboard.local` / `user1234`
+- **관리자 계정**: `admin@jboard.co.kr` / `admin1234`
+- **일반회원 계정**: `user@jboard.co.kr` / `user1234`

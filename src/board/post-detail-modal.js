@@ -132,7 +132,9 @@ export async function openDetailModal(app, id) {
 
   document.getElementById('commentAddForm').onsubmit = async (e) => {
     e.preventDefault();
-    const a = document.getElementById('commentAuthor').value.trim() || '익명';
+    const a = app.currentUser
+      ? app.currentUser.name
+      : (document.getElementById('commentAuthor').value.trim() || '익명');
     const t = document.getElementById('commentText').value.trim();
     if (!t) return;
     try {
@@ -146,6 +148,20 @@ export async function openDetailModal(app, id) {
     openDetailModal(app, id);
     showToast('댓글이 등록되었습니다.');
   };
+
+  // 댓글 작성자: 로그인 시 닉네임 고정(읽기전용), 게스트는 직접 입력
+  const commentAuthorInput = document.getElementById('commentAuthor');
+  if (commentAuthorInput) {
+    if (app.currentUser) {
+      commentAuthorInput.value = app.currentUser.name;
+      commentAuthorInput.setAttribute('readonly', 'readonly');
+      commentAuthorInput.classList.add('bg-body-secondary');
+    } else {
+      commentAuthorInput.value = '사용자';
+      commentAuthorInput.removeAttribute('readonly');
+      commentAuthorInput.classList.remove('bg-body-secondary');
+    }
+  }
 
   const el = document.getElementById('postDetailModal');
   const isOwner = app.currentUser && (p.author === app.currentUser.name || app.currentUser.role === 'admin');

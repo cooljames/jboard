@@ -13,7 +13,7 @@ export function renderAdmin(app) {
   app.appRoot.innerHTML = `
   <div class="app-wrapper">
     <!-- ═══ App Header ═══ -->
-    <nav class="app-header navbar navbar-expand bg-body shadow-sm px-3">
+    <nav class="app-header navbar navbar-expand bg-body shadow-sm px-3 notranslate" translate="no">
       <div class="container-fluid">
         <!-- Start Navbar Links -->
         <ul class="navbar-nav align-items-center">
@@ -135,7 +135,7 @@ export function renderAdmin(app) {
     </nav>
 
     <!-- ═══ App Sidebar ═══ -->
-    <aside class="app-sidebar bg-body-secondary shadow" data-bs-theme="dark">
+    <aside class="app-sidebar bg-body-secondary shadow notranslate" translate="no" data-bs-theme="dark">
       <!-- Sidebar Brand -->
       <div class="sidebar-brand">
         <a href="#" class="brand-link" data-nav="home">
@@ -186,7 +186,7 @@ export function renderAdmin(app) {
     </main>
 
     <!-- ═══ App Footer ═══ -->
-    <footer class="app-footer text-muted py-3 px-4 bg-body border-top">
+    <footer class="app-footer text-muted py-3 px-4 bg-body border-top notranslate" translate="no">
       <div class="float-end d-none d-sm-inline"><b>AdminLTE</b> 4.9.1 Official Theme</div>
       <strong>© 2026 <a href="#" class="text-decoration-none">J뉴스보드</a>.</strong> All rights reserved.
     </footer>

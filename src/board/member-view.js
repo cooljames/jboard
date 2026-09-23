@@ -9,7 +9,7 @@ export function renderMemberBoard(app) {
 
   app.appRoot.innerHTML = `
   <!-- ═══ Member Navbar ═══ -->
-  <nav class="pub-navbar">
+  <nav class="pub-navbar notranslate" translate="no">
     <div class="container-fluid px-2 px-md-3 px-xl-4">
       <div class="d-flex align-items-center justify-content-between py-2">
         <div class="d-flex align-items-center gap-3">
@@ -79,7 +79,7 @@ export function renderMemberBoard(app) {
   </main>
 
   <!-- ═══ Clean Modern Footer ═══ -->
-  <footer class="pub-footer bg-body border-top py-4 mt-4">
+  <footer class="pub-footer bg-body border-top py-4 mt-4 notranslate" translate="no">
     <div class="container-fluid px-2 px-md-3 px-xl-4">
       <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
         <div class="d-flex align-items-center gap-2">
