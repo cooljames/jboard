@@ -2,7 +2,7 @@
 // Post Detail Modal, Comments & Delete Handler
 // ═══════════════════════════════════════════════════════════
 import { api } from '../api.js';
-import { showToast, escapeHtml, formatFileSize, formatLocalTime } from '../utils/ui-helpers.js';
+import { showToast, escapeHtml, formatFileSize, formatLocalTime, normalizeBlankLines } from '../utils/ui-helpers.js';
 
 export async function openDetailModal(app, id) {
   let p = app.posts.find(x => x.id === id);
@@ -73,9 +73,9 @@ export async function openDetailModal(app, id) {
     </div>
   `;
 
-  // Render Rich Content
+  // Render Rich Content (연속 빈줄은 1개로 교정 후 표시)
   const isHtml = p.content.includes('<p>') || p.content.includes('<div>') || p.content.includes('<img');
-  document.getElementById('detailContent').innerHTML = isHtml ? p.content : p.content.replace(/\n/g, '<br>');
+  document.getElementById('detailContent').innerHTML = isHtml ? normalizeBlankLines(p.content) : p.content.replace(/\n/g, '<br>');
 
   // Attachments display
   const attachContainer = document.getElementById('detailAttachmentsContainer');

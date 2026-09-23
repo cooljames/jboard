@@ -54,7 +54,7 @@ export function renderAnalysisCardHtml(controller) {
             <i class="bi bi-send-check-fill"></i><span>게시판에 등록</span>
           </button>
           <button type="button" class="btn btn-outline-light btn-sm rounded-pill px-3 d-flex align-items-center gap-1" id="viewNewTabBtn">
-            <i class="bi bi-box-arrow-up-right"></i><span>새 탭 열기</span>
+            <i class="bi bi-box-arrow-up-right"></i><span>새 탭으로 열기</span>
           </button>
         </div>
       </div>
@@ -174,5 +174,32 @@ export function openReportInNewTab(controller) {
   const html = buildHtmlDocument(title, nowDisplay, analyses, articles, tags);
   const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
   const blobUrl = URL.createObjectURL(blob);
-  window.open(blobUrl, '_blank');
+
+  // 팝업 차단 대응: window.open → 실패 시 임시 링크 클릭 방식
+  let opened = null;
+  try {
+    opened = window.open(blobUrl, '_blank', 'noopener');
+  } catch {}
+  if (!opened) {
+    try {
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      opened = true;
+    } catch {}
+  }
+  if (!opened) {
+    controller.app?.showToast?.('새 탭이 차단되었습니다. 브라우저 팝업을 허용한 뒤 다시 시도해 주세요.', 'danger');
+    return;
+  }
+  // 메모리 정리 (탭 로드 후 여유 있게 해제)
+  setTimeout(() => {
+    try {
+      URL.revokeObjectURL(blobUrl);
+    } catch {}
+  }, 60000);
 }

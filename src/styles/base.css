@@ -8,6 +8,10 @@
   --jb-primary-dark: #3730a3;
   --jb-gradient: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #a855f7 100%);
   --jb-gradient-warm: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%);
+  --jb-blizzard: #ACE5EE;
+  --jb-blizzard-deep: #4FB8DD;
+  --jb-navy: #0b3550;
+  --jb-blizzard-gradient: linear-gradient(135deg, #C9F0F7 0%, #ACE5EE 45%, #7FD4E8 100%);
   --jb-card-radius: 12px;
   --jb-font: 'Source Sans 3', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
@@ -21,34 +25,54 @@ body {
   overflow-x: hidden;
 }
 
-/* ── Public Navbar ── */
+/* ── Public Navbar (Blizzard Blue) ── */
 .pub-navbar {
   position: fixed;
   top: 0; left: 0; right: 0;
   z-index: 1030;
   backdrop-filter: blur(16px) saturate(180%);
   -webkit-backdrop-filter: blur(16px) saturate(180%);
-  background: rgba(var(--bs-body-bg-rgb, 255,255,255), 0.82);
-  border-bottom: 1px solid rgba(0,0,0,0.06);
+  background: linear-gradient(135deg, rgba(201,240,247,0.96) 0%, rgba(172,229,238,0.96) 45%, rgba(127,212,232,0.96) 100%);
+  border-bottom: 1px solid rgba(11,53,80,0.12);
+  box-shadow: 0 2px 16px rgba(79,184,221,0.18);
   transition: background 0.3s, box-shadow 0.3s;
 }
 .pub-navbar.scrolled {
-  box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+  box-shadow: 0 6px 28px rgba(11,53,80,0.18);
 }
+/* 블리자드 블루 위에서는 라이트/다크 공통 네이비 전경 */
 [data-bs-theme="dark"] .pub-navbar {
-  background: rgba(30,30,40,0.85);
-  border-bottom-color: rgba(255,255,255,0.06);
+  background: linear-gradient(135deg, rgba(201,240,247,0.96) 0%, rgba(172,229,238,0.96) 45%, rgba(127,212,232,0.96) 100%);
+  border-bottom-color: rgba(11,53,80,0.12);
 }
+.pub-navbar .text-body { --bs-text-opacity: 1; color: #0b3550 !important; }
+.pub-navbar .text-body-secondary { --bs-text-opacity: 1; color: rgba(11,53,80,0.72) !important; }
 
 .pub-navbar .nav-link {
   font-weight: 500;
   padding: 0.5rem 1rem !important;
   border-radius: 8px;
   transition: background 0.2s, color 0.2s;
+  color: #0e4a6e !important;
 }
 .pub-navbar .nav-link:hover {
-  background: rgba(79,70,229,0.08);
-  color: var(--jb-primary) !important;
+  background: rgba(255,255,255,0.5);
+  color: #083344 !important;
+}
+/* 네브바 안 토글 버튼군의 비활성 버튼도 네이비 톤으로 */
+.pub-navbar .btn-light {
+  --bs-btn-color: #0b3550;
+  --bs-btn-bg: rgba(255,255,255,0.65);
+  --bs-btn-border-color: transparent;
+  --bs-btn-hover-bg: rgba(255,255,255,0.9);
+  --bs-btn-hover-color: #083344;
+}
+.pub-navbar .btn-outline-secondary {
+  --bs-btn-color: #0b3550;
+  --bs-btn-border-color: rgba(11,53,80,0.35);
+  --bs-btn-hover-bg: rgba(255,255,255,0.5);
+  --bs-btn-hover-color: #083344;
+  --bs-btn-hover-border-color: rgba(11,53,80,0.35);
 }
 
 /* ── Public Main Container ── */
@@ -201,6 +225,23 @@ body {
 
 /* ── Feature Section ── */
 .feature-section { padding: 6rem 0; }
+/* 고정 헤더에 가려지지 않게 앵커 오프셋 */
+#updates, #posts, #contact { scroll-margin-top: 84px; }
+/* 최상단 섹션과 블리자드 헤더의 시각적 연결 */
+#updates { position: relative; overflow: hidden; }
+#updates::before {
+  content: '';
+  position: absolute;
+  top: -220px; left: 50%;
+  transform: translateX(-50%);
+  width: 900px; height: 420px;
+  background: radial-gradient(ellipse, rgba(172,229,238,0.4) 0%, transparent 70%);
+  pointer-events: none;
+}
+[data-bs-theme="dark"] #updates::before {
+  background: radial-gradient(ellipse, rgba(172,229,238,0.13) 0%, transparent 70%);
+}
+#updates > .container-fluid { position: relative; z-index: 1; }
 .section-label {
   display: inline-flex;
   align-items: center;
@@ -211,8 +252,14 @@ body {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  background: rgba(79,70,229,0.08);
-  color: var(--jb-primary);
+  background: rgba(79,184,221,0.16);
+  color: #0b5a86;
+  border: 1px solid rgba(79,184,221,0.35);
+}
+[data-bs-theme="dark"] .section-label {
+  background: rgba(172,229,238,0.14);
+  color: #ACE5EE;
+  border-color: rgba(172,229,238,0.3);
 }
 .section-title {
   font-size: clamp(1.6rem, 3vw, 2.4rem);
@@ -229,8 +276,8 @@ body {
 }
 .feature-card:hover {
   transform: translateY(-6px);
-  box-shadow: 0 16px 40px rgba(0,0,0,0.08);
-  border-color: var(--jb-primary-light);
+  box-shadow: 0 16px 40px rgba(79,184,221,0.18);
+  border-color: var(--jb-blizzard-deep);
 }
 .feature-icon {
   width: 56px; height: 56px;

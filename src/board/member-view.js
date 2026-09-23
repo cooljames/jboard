@@ -26,6 +26,9 @@ export function renderMemberBoard(app) {
             <button type="button" class="btn btn-sm ${!isNews ? 'btn-primary' : 'btn-light border-0'} rounded-pill px-3 py-1 fw-semibold d-flex align-items-center gap-1 shadow-none" id="memberTabBoardBtn">
               <i class="bi bi-chat-square-text-fill"></i><span>커뮤니티 게시판</span>
             </button>
+            <button type="button" class="btn btn-sm btn-light border-0 rounded-pill px-3 py-1 fw-semibold d-flex align-items-center gap-1 shadow-none" data-nav="home">
+              <i class="bi bi-house"></i><span>홈으로</span>
+            </button>
           </div>
         </div>
 

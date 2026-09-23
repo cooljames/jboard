@@ -254,6 +254,9 @@ export function renderPublicNews(app) {
               <i class="bi bi-newspaper"></i><span>실시간 뉴스</span>
               <span class="badge bg-danger rounded-pill px-1.5 py-0 text-xs">AI</span>
             </button>
+            <button type="button" class="btn btn-sm btn-light border-0 rounded-pill px-3 py-1 fw-semibold d-flex align-items-center gap-1 shadow-none" data-nav="board">
+              <i class="bi bi-chat-square-text-fill"></i><span>커뮤니티 게시판</span>
+            </button>
             <button type="button" class="btn btn-sm btn-light border-0 rounded-pill px-3 py-1 fw-semibold d-flex align-items-center gap-1 shadow-none" data-nav="home">
               <i class="bi bi-house"></i><span>홈으로</span>
             </button>

@@ -21,6 +21,15 @@ export function showToast(msg, type = 'primary') {
   el.addEventListener('hidden.bs.toast', () => el.remove());
 }
 
+// 본문 빈줄 정규화: 빈 문단을 표준형으로 통일 후 연속 빈줄을 1개로 압축
+// (이전에 저장된 글의 2줄 띄움도 보기·저장 시점에 교정)
+export function normalizeBlankLines(html) {
+  if (!html) return '';
+  return String(html)
+    .replace(/<p[^>]*>(?:\s|&nbsp;|<br\s*\/?>)*<\/p>/gi, '<p><br></p>')
+    .replace(/(<p><br><\/p>)(\s*<p><br><\/p>)+/gi, '<p><br></p>');
+}
+
 export function escapeHtml(str) {
   if (!str) return '';
   return String(str)

@@ -130,7 +130,7 @@ export function renderNewsToolbarHtml(ctrl) {
           </div>
         </div>
 
-        <!-- Row 2: 기사 분석, 보고서 열어보기, 실시간 기사 수 및 선택 카운트 -->
+        <!-- Row 2: 기사 분석, 새 탭으로 열기, 실시간 기사 수 및 선택 카운트 -->
         <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
           <div class="d-flex flex-wrap align-items-center gap-2">
             <button type="button" class="btn btn-success btn-sm px-3 fw-bold shadow-sm d-inline-flex align-items-center gap-2" id="exactBtnAnalyzeSave" ${ctrl.isAnalyzing ? 'disabled' : ''}>
@@ -138,7 +138,7 @@ export function renderNewsToolbarHtml(ctrl) {
               <span>${ctrl.isAnalyzing ? '선택된 기사 분석 중...' : '선택된 기사 분석하기'}</span>
             </button>
             <button type="button" class="btn btn-dark btn-sm px-3 fw-semibold shadow-sm d-inline-flex align-items-center gap-1" id="exactBtnOpenReport">
-              <i class="bi bi-box-arrow-up-right me-1"></i>열어보기
+              <i class="bi bi-box-arrow-up-right me-1"></i>새 탭으로 열기
             </button>
           </div>
 

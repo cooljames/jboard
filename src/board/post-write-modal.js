@@ -2,7 +2,7 @@
 // Post Creation & Edit Modal with Quill & Multi-File Dropzone
 // ═══════════════════════════════════════════════════════════
 import { api } from '../api.js';
-import { showToast, escapeHtml, formatFileSize, formatLocalTime } from '../utils/ui-helpers.js';
+import { showToast, escapeHtml, formatFileSize, formatLocalTime, normalizeBlankLines } from '../utils/ui-helpers.js';
 
 export function initQuillEditor(app) {
   const container = document.getElementById('quillEditorContainer');
@@ -320,7 +320,8 @@ export async function handleCreatePost(app) {
   const quillHtml = app.quill ? app.quill.root.innerHTML : '';
   const quillText = app.quill ? app.quill.getText().trim() : '';
   const hiddenVal = document.getElementById('postContent').value || '';
-  const content = quillText ? quillHtml : (hiddenVal.trim() ? hiddenVal : quillHtml);
+  const rawContent = quillText ? quillHtml : (hiddenVal.trim() ? hiddenVal : quillHtml);
+  const content = normalizeBlankLines(rawContent);
   const textContent = (quillText || hiddenVal.replace(/<[^>]*>?/gm, '')).trim();
 
   if (!title || !author || (!textContent && !content.includes('<img'))) {
