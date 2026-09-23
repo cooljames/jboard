@@ -3,6 +3,8 @@ import postsHandler from './api/posts.js';
 import uploadHandler from './api/upload.js';
 import authHandler from './api/auth.js';
 import analyticsHandler from './api/analytics.js';
+import rssHandler from './api/rss.js';
+import translateHandler from './api/translate.js';
 
 function vercelApiDevPlugin() {
   return {
@@ -43,6 +45,12 @@ function vercelApiDevPlugin() {
             return res;
           };
         }
+        if (!res.send) {
+          res.send = function(data) {
+            res.end(data);
+            return res;
+          };
+        }
 
         req.query = query;
         req.body = body;
@@ -59,6 +67,12 @@ function vercelApiDevPlugin() {
         }
         if (pathname === '/api/analytics') {
           return analyticsHandler(req, res);
+        }
+        if (pathname === '/api/rss') {
+          return rssHandler(req, res);
+        }
+        if (pathname === '/api/translate') {
+          return translateHandler(req, res);
         }
 
         res.status(404).json({ error: 'API route not found' });
@@ -78,14 +92,14 @@ export default defineConfig(({ mode }) => {
     }
   }
   if (process.env.DATABASE_URL) {
-    console.log('[JBoard dev] DATABASE_URL loaded — Neon Postgres mode');
+    console.log('[J뉴스보드 dev] DATABASE_URL loaded — Neon Postgres mode');
   } else {
-    console.log('[JBoard dev] DATABASE_URL not set — in-memory fallback mode');
+    console.log('[J뉴스보드 dev] DATABASE_URL not set — in-memory fallback mode');
   }
   if (process.env.BLOB_READ_WRITE_TOKEN) {
-    console.log('[JBoard dev] BLOB_READ_WRITE_TOKEN loaded — Vercel Blob mode');
+    console.log('[J뉴스보드 dev] BLOB_READ_WRITE_TOKEN loaded — Vercel Blob mode');
   } else {
-    console.log('[JBoard dev] BLOB_READ_WRITE_TOKEN not set — DataURL fallback mode');
+    console.log('[J뉴스보드 dev] BLOB_READ_WRITE_TOKEN not set — DataURL fallback mode');
   }
 
   return {
@@ -93,7 +107,14 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 3000,
       strictPort: true, // 3000이 사용 중이면 3001 등으로 넘어가지 않고 즉시 에러
-      open: false
+      open: false,
+      proxy: {
+        '/api/gnews': {
+          target: 'https://news.google.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/gnews/, ''),
+        }
+      }
     }
   };
 });

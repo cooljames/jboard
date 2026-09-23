@@ -1,4 +1,4 @@
-// JBoard REST API Client for Vercel Serverless + Neon Postgres + Vercel Blob
+// J뉴스보드 REST API Client for Vercel Serverless + Neon Postgres + Vercel Blob
 
 const BASE_URL = '/api';
 
