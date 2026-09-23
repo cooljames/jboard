@@ -4,6 +4,30 @@
 import { api } from '../api.js';
 import { showToast, escapeHtml, formatFileSize, formatLocalTime, normalizeBlankLines } from '../utils/ui-helpers.js';
 
+// 간이 HTML 소독: <script>, on* 이벤트 핸들러, javascript: 프로토콜 제거
+function sanitizeHtml(html) {
+  if (!html) return '';
+  return String(html)
+    // <script>...</script> 제거
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    // <script ... /> 자체 닫기 태그 제거
+    .replace(/<script[^>]*\/>/gi, '')
+    // on* 이벤트 속성 제거 (onerror, onclick, onload 등)
+    .replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    // javascript: 프로토콜 href/src 무력화
+    .replace(/(href|src)\s*=\s*(["'])\s*javascript:/gi, '$1=$2#blocked:');
+}
+
+// URL 프로토콜 화이트리스트 검증
+function sanitizeUrl(url) {
+  if (!url) return '#';
+  const trimmed = String(url).trim();
+  if (trimmed.startsWith('https://') || trimmed.startsWith('http://') || trimmed.startsWith('data:') || trimmed.startsWith('/')) {
+    return trimmed;
+  }
+  return '#blocked';
+}
+
 export async function openDetailModal(app, id) {
   let p = app.posts.find(x => x.id === id);
   try {
@@ -73,9 +97,10 @@ export async function openDetailModal(app, id) {
     </div>
   `;
 
-  // Render Rich Content (연속 빈줄은 1개로 교정 후 표시)
+  // Render Rich Content (sanitize 후 빈줄 정규화)
   const isHtml = p.content.includes('<p>') || p.content.includes('<div>') || p.content.includes('<img');
-  document.getElementById('detailContent').innerHTML = isHtml ? normalizeBlankLines(p.content) : p.content.replace(/\n/g, '<br>');
+  const sanitized = isHtml ? sanitizeHtml(normalizeBlankLines(p.content)) : escapeHtml(p.content).replace(/\n/g, '<br>');
+  document.getElementById('detailContent').innerHTML = sanitized;
 
   // Attachments display
   const attachContainer = document.getElementById('detailAttachmentsContainer');
@@ -94,8 +119,9 @@ export async function openDetailModal(app, id) {
       else if (att.type?.includes('zip')) icon = 'bi-file-earmark-zip text-warning';
 
       const formattedSize = formatFileSize(att.size);
+      const safeUrl = sanitizeUrl(att.url);
       return `
-        <a href="${att.url}" target="_blank" download="${escapeHtml(att.name)}" class="detail-attachment-badge" title="다운로드/열기">
+        <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" download="${escapeHtml(att.name)}" class="detail-attachment-badge" title="다운로드/열기">
           <i class="bi ${icon}"></i>
           <span>${escapeHtml(att.name)}</span>
           <span class="badge bg-secondary-subtle text-secondary small">${formattedSize}</span>

@@ -6,11 +6,12 @@ export function showToast(msg, type = 'primary') {
   const ct = document.getElementById('toastContainer');
   if (!ct) return;
   const id = 't_' + Date.now();
+  const safeMsg = escapeHtml(msg);
   ct.insertAdjacentHTML(
     'beforeend',
     `<div id="${id}" class="toast align-items-center text-bg-${type} border-0 shadow" role="alert">
       <div class="d-flex">
-        <div class="toast-body"><i class="bi bi-info-circle-fill me-2"></i>${msg}</div>
+        <div class="toast-body"><i class="bi bi-info-circle-fill me-2"></i>${safeMsg}</div>
         <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
       </div>
     </div>`

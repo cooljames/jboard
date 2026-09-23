@@ -37,6 +37,8 @@ export function initQuillEditor(app) {
   }
 
   app.quill.on('text-change', () => {
+    // 제출 처리 중(form.reset 등)에는 hidden input 갱신을 건너뜀 (내용 유실 방지)
+    if (app._isSubmitting) return;
     const hiddenInput = document.getElementById('postContent');
     if (hiddenInput) {
       hiddenInput.value = app.quill.root.innerHTML;
@@ -279,7 +281,7 @@ export function openPostWriteModal(app, editId = null, initialData = null) {
   const submitBtn = form?.querySelector('button[type="submit"]');
 
   if (catInput && app.categories?.length) {
-    catInput.innerHTML = app.categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    catInput.innerHTML = app.categories.map(c => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`).join('');
   }
 
   if (authorInput) {
@@ -359,6 +361,7 @@ export async function handleCreatePost(app) {
     return;
   }
 
+  app._isSubmitting = true;
   const submitBtn = document.querySelector('#postWriteForm button[type="submit"]');
   if (submitBtn) {
     submitBtn.disabled = true;
@@ -437,8 +440,10 @@ export async function handleCreatePost(app) {
     }
     app.saveData('jboard_posts', app.posts);
 
-    document.getElementById('postWriteForm').reset();
+    // reset 순서: Quill 모델을 먼저 비운 후 form.reset()
+    // (form.reset이 hidden input을 비우면 text-change가 빈 값을 다시 쓰는 경합 방지)
     if (app.quill) app.quill.setContents([]);
+    document.getElementById('postWriteForm').reset();
     app.attachedFiles = [];
     renderAttachedFilesList(app);
 
@@ -450,6 +455,7 @@ export async function handleCreatePost(app) {
     console.error('Post creation error:', err);
     showToast(err.message || '게시글 등록 중 오류가 발생했습니다.', 'danger');
   } finally {
+    app._isSubmitting = false;
     if (submitBtn) {
       submitBtn.disabled = false;
       const isEditMode = !!document.getElementById('postWriteForm').dataset.editId;

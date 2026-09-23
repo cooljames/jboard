@@ -212,6 +212,17 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Title and content are required' });
       }
 
+      // 입력값 길이 제한 (DoS 및 DB 스토리지 보호)
+      if (String(title).length > 255) {
+        return res.status(400).json({ error: '제목은 255자 이하로 입력해 주세요.' });
+      }
+      if (String(content).length > 500 * 1024) {
+        return res.status(400).json({ error: '본문 내용이 너무 깁니다. (500KB 이하)' });
+      }
+      if (String(author || '').length > 100) {
+        return res.status(400).json({ error: '작성자 이름은 100자 이하로 입력해 주세요.' });
+      }
+
       const postAttachments = Array.isArray(attachments) ? attachments : [];
 
       if (sql) {

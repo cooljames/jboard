@@ -25,17 +25,34 @@ export async function syncWithBackend(app) {
           comments: localExisting?.comments || [],
           attachments: typeof sp.attachments === 'string' ? JSON.parse(sp.attachments || '[]') : (sp.attachments || []),
           createdAt: formatLocalTime(sp.created_at),
-          isNotice: (sp.title || '').includes('📢')
+          isNotice: (sp.title || '').includes('📢'),
+          _serverSynced: true
         };
       });
 
-      // Keep local-only posts
+      // Smart Merge: 로컬에만 존재하거나 로컬에서 수정된 게시글 보존
       const serverIds = new Set(serverPosts.map(p => p.id));
       const localOnlyPosts = app.posts.filter(lp => !serverIds.has(lp.id));
 
-      app.posts = [...localOnlyPosts, ...serverPosts];
+      // 서버 게시글 중 로컬에 이미 content가 있는 경우, 로컬 content가 더 길면 보존
+      const mergedServerPosts = serverPosts.map(sp => {
+        const local = app.posts.find(lp => lp.id === sp.id);
+        if (local && local.content && !local._serverSynced) {
+          // 로컬에서 수정된 게시글은 로컬 데이터 유지
+          return { ...sp, content: local.content, title: local.title, category: local.category, categoryName: local.categoryName };
+        }
+        return sp;
+      });
+
+      app.posts = [...localOnlyPosts, ...mergedServerPosts];
       app.saveData('jboard_posts', app.posts);
-      app.refreshCurrentBoard();
+
+      // 모달이 열려 있으면 게시판 목록 갱신을 건너뜀 (DOM 경합으로 에디터 내용 유실 방지)
+      const writeModalOpen = document.getElementById('postWriteModal')?.classList.contains('show');
+      const detailModalOpen = document.getElementById('postDetailModal')?.classList.contains('show');
+      if (!writeModalOpen && !detailModalOpen) {
+        app.refreshCurrentBoard();
+      }
       app.refreshNotifications();
     }
   } catch (e) {

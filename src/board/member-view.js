@@ -324,6 +324,12 @@ export function renderBoardTable(app, container) {
 }
 
 export function refreshCurrentBoard(app) {
+  // 모달이 열려 있으면 게시판 목록을 다시 렌더링하지 않음
+  // (DOM 재구성으로 에디터·모달 참조가 꼬여 내용이 사라지는 것 방지)
+  const writeModalOpen = document.getElementById('postWriteModal')?.classList.contains('show');
+  const detailModalOpen = document.getElementById('postDetailModal')?.classList.contains('show');
+  if (writeModalOpen || detailModalOpen) return;
+
   if (app.currentPage === 'home' || app.currentPage === 'board') {
     const el = document.getElementById('homeBoardContainer');
     if (el) renderBoardTable(app, el);
