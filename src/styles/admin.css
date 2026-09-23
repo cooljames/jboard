@@ -344,6 +344,11 @@
 #postDetailModal .modal-body {
   overflow-x: hidden;
 }
+.jboard-text-format, 
+.ql-editor {
+  line-height: 1.7 !important;
+  font-size: 1rem;
+}
 #detailContent {
   overflow-wrap: anywhere;
   word-break: break-word;

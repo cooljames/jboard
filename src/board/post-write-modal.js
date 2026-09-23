@@ -8,15 +8,10 @@ export function initQuillEditor(app) {
   const container = document.getElementById('quillEditorContainer');
   if (!container) return;
 
-  // 기존 에디터 잔재 정리 후 재생성 (중복 초기화 방지)
-  try {
-    app.quill?.off?.('text-change');
-  } catch {}
-  app.quill = null;
-  const oldToolbar = container.parentElement.querySelector('.ql-toolbar');
-  if (oldToolbar) oldToolbar.remove();
-
-  container.innerHTML = '';
+  // 이미 에디터가 초기화되어 있다면 인스턴스를 재사용 (Race condition 및 내용 증발 방지)
+  if (app.quill) {
+    return;
+  }
 
   try {
     app.quill = new window.Quill(container, {

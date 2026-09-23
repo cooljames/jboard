@@ -74,7 +74,7 @@
          ══════════════════════════════════════════════════ -->
 
     <!-- Write Post Modal (responsive: xl on desktop, fullscreen on smaller screens) -->
-    <div class="modal fade" id="postWriteModal" tabindex="-1" aria-hidden="true">
+    <div class="modal fade" id="postWriteModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
       <div class="modal-dialog modal-xl modal-fullscreen-lg-down modal-dialog-scrollable">
         <div class="modal-content">
           <div class="modal-header bg-primary text-white">
@@ -151,7 +151,7 @@
           </div>
           <div class="modal-body p-4">
             <div id="detailMeta" class="mb-3 pb-2 border-bottom"></div>
-            <div id="detailContent" class="mb-4 text-break lh-lg"></div>
+            <div id="detailContent" class="mb-4 text-break jboard-text-format"></div>
 
             <!-- Attached Files Display Section -->
             <div id="detailAttachmentsContainer" class="mb-4 p-3 bg-body-tertiary rounded-3 border d-none">
