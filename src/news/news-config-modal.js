@@ -18,6 +18,7 @@ export function openNewsConfigModal(controller) {
             <div class="alert alert-light border small mb-3">
               <i class="bi bi-shield-check text-success me-1"></i>
               설정 및 API 키는 회원의 브라우저에 안전하게 보관되며 외부 서버로 전송되지 않습니다.
+              <br />API 키는 로그인 계정별로 따로 저장되어 다른 계정과 공유되지 않습니다.
             </div>
 
             <div class="mb-3">

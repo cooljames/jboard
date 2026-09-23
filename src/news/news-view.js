@@ -52,17 +52,42 @@ export class NewsDeskController {
     this.loadArticles();
   }
 
+  // API 키는 로그인 계정별로 브라우저에 따로 보관 (계정 간 공유 방지)
+  apiKeyStoreKey() {
+    const email = this.app?.currentUser?.email || 'guest';
+    return `${NEWS_CONFIG_STORAGE_KEY}:apikey:${email}`;
+  }
+
   loadConfig() {
+    let base;
     try {
       const data = localStorage.getItem(NEWS_CONFIG_STORAGE_KEY);
-      return data ? { ...DEFAULT_NEWS_CONFIG, ...JSON.parse(data) } : { ...DEFAULT_NEWS_CONFIG };
+      base = data ? { ...DEFAULT_NEWS_CONFIG, ...JSON.parse(data) } : { ...DEFAULT_NEWS_CONFIG };
     } catch {
-      return { ...DEFAULT_NEWS_CONFIG };
+      base = { ...DEFAULT_NEWS_CONFIG };
     }
+    try {
+      const perUserKey = localStorage.getItem(this.apiKeyStoreKey());
+      if (perUserKey) {
+        base.apiKey = perUserKey;
+      } else if (base.apiKey) {
+        // 기존 공용 저장소에 있던 키는 현재 계정으로 1회 이전
+        localStorage.setItem(this.apiKeyStoreKey(), base.apiKey);
+      }
+      // 공용 저장소에는 API 키를 남기지 않음 (다른 계정 노출 방지)
+      base.apiKey = localStorage.getItem(this.apiKeyStoreKey()) || '';
+      const shared = JSON.parse(localStorage.getItem(NEWS_CONFIG_STORAGE_KEY) || '{}');
+      if (shared.apiKey) {
+        delete shared.apiKey;
+        localStorage.setItem(NEWS_CONFIG_STORAGE_KEY, JSON.stringify(shared));
+      }
+    } catch {}
+    return base;
   }
 
   saveConfig() {
     try {
+      // 일반 설정은 공용 저장, API 키는 현재 계정별로 따로 저장
       localStorage.setItem(
         NEWS_CONFIG_STORAGE_KEY,
         JSON.stringify({
@@ -72,9 +97,13 @@ export class NewsDeskController {
           searchMode: this.searchMode,
           summaryLines: this.summaryLines,
           modelId: this.modelId,
-          apiKey: this.apiKey,
         })
       );
+      if (this.apiKey) {
+        localStorage.setItem(this.apiKeyStoreKey(), this.apiKey);
+      } else {
+        localStorage.removeItem(this.apiKeyStoreKey());
+      }
     } catch (e) {
       console.warn('Failed to save news config to localStorage:', e);
     }

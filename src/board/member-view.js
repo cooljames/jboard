@@ -85,7 +85,7 @@ export function renderMemberBoard(app) {
         <div class="d-flex align-items-center gap-2">
           <i class="bi bi-kanban-fill fs-5" style="color:var(--jb-primary)"></i>
           <span class="fw-bold">JnewsBoard</span>
-          <span class="text-body-secondary small ms-2">© 2026 JnewsBoard · AdminLTE 4 모던 커뮤니티 플랫폼</span>
+          <span class="text-body-secondary small ms-2">© 2026 JnewsBoard</span>
         </div>
         <div class="d-flex align-items-center gap-3 small text-body-secondary">
           <span>로그인: <strong>${app.currentUser.name}</strong></span>
