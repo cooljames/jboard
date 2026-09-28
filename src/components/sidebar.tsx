@@ -16,16 +16,22 @@ import {
   Activity, 
   AlertTriangle,
   Radio,
-  HelpCircle
+  HelpCircle,
+  Sun,
+  Moon,
+  Users
 } from 'lucide-react';
 
 interface SidebarProps {
   isMerged: boolean;
   onToggleMerge: () => void;
   onOpenPanicModal: () => void;
+  theme: 'dark' | 'light';
+  onToggleTheme: () => void;
 }
 
-export function Sidebar({ isMerged, onToggleMerge, onOpenPanicModal }: SidebarProps) {
+export function Sidebar({ isMerged, onToggleMerge, onOpenPanicModal, theme, onToggleTheme }: SidebarProps) {
+
   const pathname = usePathname();
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
   const [marketStatus, setMarketStatus] = useState<{ text: string; color: string; badge: string }>({
@@ -100,9 +106,11 @@ export function Sidebar({ isMerged, onToggleMerge, onOpenPanicModal }: SidebarPr
     { label: 'AI 스마트 종목 발굴', href: '/search', icon: Search, desc: '차트 & Gemini 분석' },
     { label: '실시간 주문 & 매매', href: '/trading', icon: ArrowLeftRight, desc: 'KIS 호가 및 수동 체결' },
     { label: '커뮤니티 게시판', href: '/board', icon: MessageSquare, desc: '전략 토론 & 일지' },
+    { label: '회원 & 권한 관리', href: '/admin?tab=members', icon: Users, desc: 'jboard 회원 제어' },
     { label: '시스템 환경 설정', href: '/settings', icon: Key, desc: 'KIS & Gemini API' },
     { label: '통합 관리자', href: '/admin', icon: ShieldAlert, desc: '서버 & 킬스위치 제어' },
   ];
+
 
   const formatKoreanDate = (d: Date) => {
     const days = ['일', '월', '화', '수', '목', '금', '토'];
@@ -218,9 +226,30 @@ export function Sidebar({ isMerged, onToggleMerge, onOpenPanicModal }: SidebarPr
         </nav>
       </div>
 
-      {/* Bottom Controls: Panic Liquidation & Status */}
+      {/* Bottom Controls: Theme Toggle, Panic Liquidation & Status */}
       <div className="p-3 border-t border-slate-800/80 bg-slate-950/60 space-y-2.5">
+        {/* Day / Night Theme Switch Button */}
+        <button
+          type="button"
+          onClick={onToggleTheme}
+          className={`w-full py-2 px-3 rounded-xl border flex items-center justify-between text-xs font-semibold transition-all cursor-pointer ${
+            theme === 'dark'
+              ? 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white'
+              : 'bg-amber-500/10 border-amber-500/30 text-amber-600'
+          }`}
+          title="야간(Dark) / 주간(Light) 모드 전환"
+        >
+          <span className="flex items-center gap-2">
+            {theme === 'dark' ? <Moon className="w-3.5 h-3.5 text-blue-400" /> : <Sun className="w-3.5 h-3.5 text-amber-500" />}
+            <span>{theme === 'dark' ? '야간(다크) 모드' : '주간(라이트) 모드'}</span>
+          </span>
+          <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800/80 text-slate-400 font-mono">
+            {theme === 'dark' ? '주간으로 전환' : '야간으로 전환'}
+          </span>
+        </button>
+
         {/* KIS 20 TPS Token Bucket Badge */}
+
         <div className="px-3 py-2 rounded-xl bg-slate-900/60 border border-slate-800/80 flex items-center justify-between text-[11px]">
           <span className="text-slate-400 flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />

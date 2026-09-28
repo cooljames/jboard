@@ -12,8 +12,11 @@ import {
   Zap, 
   RotateCcw,
   CheckCircle2,
-  X
+  X,
+  Sun,
+  Moon
 } from 'lucide-react';
+
 
 const PAGE_TITLES: Record<string, { title: string; subtitle: string }> = {
   '/': { title: '컨트롤 타워 (종합 대시보드)', subtitle: '실시간 자산 추이, 퀀트 성과 및 KIS 20 TPS 엔진' },
@@ -29,17 +32,22 @@ const PAGE_TITLES: Record<string, { title: string; subtitle: string }> = {
 export function LayoutShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [isMerged, setIsMerged] = useState(false);
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [panicLoading, setPanicLoading] = useState(false);
   const [panicModalOpen, setPanicModalOpen] = useState(false);
   const [panicResult, setPanicResult] = useState<string | null>(null);
 
-  // Restore merge/split state from localStorage on mount
+  // Restore merge/split and theme state from localStorage on mount
   useEffect(() => {
     try {
-      const saved = localStorage.getItem('jquant_menu_merged');
-      if (saved !== null) {
-        setIsMerged(saved === 'true');
+      const savedMerge = localStorage.getItem('jquant_menu_merged');
+      if (savedMerge !== null) {
+        setIsMerged(savedMerge === 'true');
       }
+
+      const savedTheme = (localStorage.getItem('jquant_theme') as 'dark' | 'light') || 'dark';
+      setTheme(savedTheme);
+      document.documentElement.classList.toggle('dark', savedTheme === 'dark');
     } catch {}
   }, []);
 
@@ -49,6 +57,15 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
     try {
       localStorage.setItem('jquant_menu_merged', String(nextState));
     } catch {}
+  };
+
+  const handleToggleTheme = () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(nextTheme);
+    try {
+      localStorage.setItem('jquant_theme', nextTheme);
+    } catch {}
+    document.documentElement.classList.toggle('dark', nextTheme === 'dark');
   };
 
   const handleExecutePanic = async () => {
@@ -75,12 +92,14 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <div className="min-h-screen flex bg-[#090d16] text-slate-100 antialiased selection:bg-blue-600 selection:text-white">
+    <div className="min-h-screen flex bg-[#090d16] text-slate-100 antialiased selection:bg-blue-600 selection:text-white transition-colors duration-200">
       {/* ══ 1. Left Sidebar (Collapsible / Merged) ══ */}
       <Sidebar
         isMerged={isMerged}
         onToggleMerge={handleToggleMerge}
         onOpenPanicModal={() => setPanicModalOpen(true)}
+        theme={theme}
+        onToggleTheme={handleToggleTheme}
       />
 
       {/* ══ 2. Right Main View (Expands / Merges into full screen) ══ */}
@@ -124,11 +143,36 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
 
           {/* Right Header Badges & Actions */}
           <div className="flex items-center gap-2.5 flex-shrink-0">
+            {/* Day / Night Theme Mode Switch Button */}
+            <button
+              type="button"
+              onClick={handleToggleTheme}
+              className={`p-2 rounded-xl border transition-all cursor-pointer flex items-center gap-1.5 ${
+                theme === 'dark'
+                  ? 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white'
+                  : 'bg-amber-500/15 border-amber-500/30 text-amber-600'
+              }`}
+              title="야간(다크) / 주간(라이트) 모드 전환"
+            >
+              {theme === 'dark' ? (
+                <>
+                  <Moon className="w-4 h-4 text-blue-400" />
+                  <span className="text-xs font-semibold hidden md:inline">야간모드</span>
+                </>
+              ) : (
+                <>
+                  <Sun className="w-4 h-4 text-amber-500" />
+                  <span className="text-xs font-semibold hidden md:inline">주간모드</span>
+                </>
+              )}
+            </button>
+
             {/* KIS Token Bucket Badge */}
             <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               <span>KIS 20 TPS Limiter</span>
             </div>
+
 
             {/* Quick Panic Button in Header */}
             <button
