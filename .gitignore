@@ -18,3 +18,5 @@ __pycache__/
 
 # Drizzle migrations local cache
 drizzle/
+*.tsbuildinfo
+

@@ -66,6 +66,21 @@ export const accountSnapshots = pgTable('account_snapshots', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+// 6. 커뮤니티 게시판 테이블 (Community Board Posts)
+export const boardPosts = pgTable('board_posts', {
+  id: serial('id').primaryKey(),
+  title: text('title').notNull(),
+  category: text('category').default('자유게시판').notNull(), // 공지사항, 퀀트전략, 매매일지, 종목토론, 자유게시판, Q&A
+  author: text('author').default('관리자').notNull(),
+  content: text('content').notNull(),
+  views: integer('views').default(0).notNull(),
+  likes: integer('likes').default(0).notNull(),
+  isNotice: boolean('is_notice').default(false).notNull(),
+  tags: jsonb('tags').default([]),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
 export type QuantStrategy = typeof quantStrategies.$inferSelect;
 export type NewQuantStrategy = typeof quantStrategies.$inferInsert;
 export type Order = typeof orders.$inferSelect;
@@ -76,3 +91,6 @@ export type AiAnalysisLog = typeof aiAnalysisLogs.$inferSelect;
 export type NewAiAnalysisLog = typeof aiAnalysisLogs.$inferInsert;
 export type AccountSnapshot = typeof accountSnapshots.$inferSelect;
 export type NewAccountSnapshot = typeof accountSnapshots.$inferInsert;
+export type BoardPost = typeof boardPosts.$inferSelect;
+export type NewBoardPost = typeof boardPosts.$inferInsert;
+

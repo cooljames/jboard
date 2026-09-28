@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { kisClient } from '@/lib/kis-client';
+import { getRealDailyCandles, getRealQuote } from '@/lib/real-market';
 
 // Major Korean stocks master list
 const KOREAN_STOCKS = [
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const q = searchParams.get('q');
   const ticker = searchParams.get('ticker');
-  const type = searchParams.get('type'); // 'search' | 'candles' | 'quote'
+  const type = searchParams.get('type'); // 'search' | 'candles' | 'quote' | 'stocks'
 
   // 1. Search Query
   if (type === 'search' || q) {
@@ -37,48 +38,27 @@ export async function GET(request: Request) {
     return NextResponse.json({ results: filtered });
   }
 
-  // 2. Candlestick Data for TradingView chart
+  // 2. Candlestick Data for TradingView chart (100% Real Live Daily Candles)
   if (type === 'candles' && ticker) {
-    const quote = await kisClient.getStockPrice(ticker);
-    const basePrice = quote.price || 60000;
-
-    // Generate realistic daily candles (last 60 trading days)
-    const candles = [];
-    const now = new Date();
-    let currentClose = basePrice * 0.9;
-
-    for (let i = 60; i >= 0; i--) {
-      const date = new Date(now);
-      date.setDate(date.getDate() - i);
-      // Skip weekends
-      if (date.getDay() === 0 || date.getDay() === 6) continue;
-
-      const dateStr = date.toISOString().split('T')[0];
-      const volatility = currentClose * 0.02;
-      const change = (Math.random() - 0.48) * volatility;
-      const open = Math.round(currentClose);
-      const close = Math.round(open + change);
-      const high = Math.round(Math.max(open, close) + Math.random() * (volatility * 0.8));
-      const low = Math.round(Math.min(open, close) - Math.random() * (volatility * 0.8));
-      const volume = Math.round(500000 + Math.random() * 2000000);
-
-      candles.push({
-        time: dateStr,
-        open,
-        high,
-        low,
-        close,
-        volume,
-      });
-
-      currentClose = close;
+    let quote;
+    try {
+      if (kisClient.isConfigured()) {
+        quote = await kisClient.getStockPrice(ticker);
+      } else {
+        quote = await getRealQuote(ticker);
+      }
+    } catch {
+      quote = await getRealQuote(ticker);
     }
 
-    // Set today's close to current quote price
-    if (candles.length > 0) {
-      candles[candles.length - 1].close = quote.price;
-      candles[candles.length - 1].high = Math.max(candles[candles.length - 1].high, quote.price);
-      candles[candles.length - 1].low = Math.min(candles[candles.length - 1].low, quote.price);
+    const candles = await getRealDailyCandles(ticker, 60);
+
+    // If current quote has updated price, sync the latest candle
+    if (candles.length > 0 && quote && quote.price > 0) {
+      const lastCandle = candles[candles.length - 1];
+      lastCandle.close = quote.price;
+      lastCandle.high = Math.max(lastCandle.high, quote.price);
+      lastCandle.low = Math.min(lastCandle.low, quote.price);
     }
 
     return NextResponse.json({
@@ -89,17 +69,26 @@ export async function GET(request: Request) {
     });
   }
 
-  // 3. Single Stock Quote
+  // 3. Single Stock Quote (Live Real Data)
   if (ticker) {
     try {
-      const quote = await kisClient.getStockPrice(ticker);
+      let quote;
+      if (kisClient.isConfigured()) {
+        try {
+          quote = await kisClient.getStockPrice(ticker);
+        } catch {
+          quote = await getRealQuote(ticker);
+        }
+      } else {
+        quote = await getRealQuote(ticker);
+      }
       return NextResponse.json({ quote });
     } catch (e: any) {
       return NextResponse.json({ error: e.message }, { status: 500 });
     }
   }
 
-  // Default: Return balance and major stock quotes
+  // 4. Default: Return balance and major stock quotes
   try {
     const balance = await kisClient.getAccountBalance();
     return NextResponse.json({ balance, stocks: KOREAN_STOCKS });
@@ -107,3 +96,4 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }
+

@@ -44,11 +44,19 @@ class KisClient {
   private tokenExpiresAt: number = 0;
 
   constructor() {
+    let rawAccountNo = process.env.KIS_ACCOUNT_NO || '';
+    let accountPrdtCd = process.env.KIS_ACCOUNT_PRDT_CD || '01';
+    if (rawAccountNo.includes('-')) {
+      const parts = rawAccountNo.split('-');
+      rawAccountNo = parts[0];
+      accountPrdtCd = parts[1] || accountPrdtCd;
+    }
+
     this.config = {
       appKey: process.env.KIS_APP_KEY || '',
       appSecret: process.env.KIS_APP_SECRET || '',
-      accountNo: process.env.KIS_ACCOUNT_NO || '',
-      accountPrdtCd: process.env.KIS_ACCOUNT_PRDT_CD || '01',
+      accountNo: rawAccountNo,
+      accountPrdtCd: accountPrdtCd,
       isPaperTrading: process.env.KIS_IS_PAPER_TRADING !== 'false',
       restBaseUrl:
         process.env.KIS_REST_BASE_URL ||
@@ -58,9 +66,35 @@ class KisClient {
     };
   }
 
+  public getConfig(): KisConfig {
+    return { ...this.config };
+  }
+
+  public updateConfig(newConfig: Partial<KisConfig>): void {
+    let accountNo = newConfig.accountNo !== undefined ? newConfig.accountNo : this.config.accountNo;
+    let accountPrdtCd = newConfig.accountPrdtCd !== undefined ? newConfig.accountPrdtCd : this.config.accountPrdtCd;
+
+    if (accountNo.includes('-')) {
+      const parts = accountNo.split('-');
+      accountNo = parts[0];
+      accountPrdtCd = parts[1] || accountPrdtCd;
+    }
+
+    this.config = {
+      ...this.config,
+      ...newConfig,
+      accountNo,
+      accountPrdtCd,
+    };
+    // Invalidate cached token when credentials change
+    this.cachedToken = null;
+    this.tokenExpiresAt = 0;
+  }
+
   public isConfigured(): boolean {
     return !!(this.config.appKey && this.config.appSecret && this.config.accountNo);
   }
+
 
   /**
    * Get or refresh OAuth2 Access Token
