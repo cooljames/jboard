@@ -2,20 +2,36 @@ import { NextResponse } from 'next/server';
 import { getDb, INITIAL_STRATEGIES } from '@/lib/db';
 import { quantStrategies } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
+import { getGeminiConfig, formatGeminiModelName } from '@/lib/gemini-config';
 
 export async function GET() {
+  const currentGemini = getGeminiConfig();
+  const modelLabel = formatGeminiModelName(currentGemini.model);
+
+  const applyDynamicName = (list: any[]) =>
+    list.map((s) => {
+      if (s.id === 'ai_hybrid') {
+        return {
+          ...s,
+          name: `${modelLabel} AI 멀티모달 하이브리드 필터`,
+          description: `A~D 전략 매수 후보 종목에 대해 재무 및 차트 이미지를 ${modelLabel}로 2차 정밀 심사`,
+        };
+      }
+      return s;
+    });
+
   try {
     const db = getDb();
     const rows = await db.select().from(quantStrategies);
 
     if (!rows || rows.length === 0) {
-      return NextResponse.json({ strategies: INITIAL_STRATEGIES });
+      return NextResponse.json({ strategies: applyDynamicName(INITIAL_STRATEGIES) });
     }
 
-    return NextResponse.json({ strategies: rows });
+    return NextResponse.json({ strategies: applyDynamicName(rows) });
   } catch (error: any) {
     console.warn('[API Strategies GET] Falling back to default initial strategies:', error.message);
-    return NextResponse.json({ strategies: INITIAL_STRATEGIES });
+    return NextResponse.json({ strategies: applyDynamicName(INITIAL_STRATEGIES) });
   }
 }
 

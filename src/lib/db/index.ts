@@ -76,8 +76,8 @@ export const INITIAL_STRATEGIES = [
   },
   {
     id: 'ai_hybrid',
-    name: 'Gemini 2.0 Flash AI 멀티모달 하이브리드 필터',
-    description: 'A~D 전략 매수 후보 종목에 대해 재무 및 차트 이미지를 Gemini 2.0으로 2차 정밀 심사',
+    name: 'Gemini 3.8 Flash AI 멀티모달 하이브리드 필터',
+    description: 'A~D 전략 매수 후보 종목에 대해 재무 및 차트 이미지를 Gemini 3.8 Flash로 2차 정밀 심사',
     enabled: true,
     allocationWeight: '0.20',
     targetMarket: 'ALL',

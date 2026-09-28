@@ -136,38 +136,19 @@ export function Sidebar({ isMerged, onToggleMerge, onOpenPanicModal, theme, onTo
     <aside className="w-64 h-screen sticky top-0 flex flex-col justify-between bg-slate-950/95 border-r border-slate-800/80 backdrop-blur-xl z-40 select-none">
       {/* Top Section */}
       <div className="flex flex-col">
-        {/* Brand Header & Window Merge Button */}
-        <div className="h-16 px-4 flex items-center justify-between border-b border-slate-800/80 bg-slate-950/50">
+        {/* Brand Header */}
+        <div className="h-16 px-4 flex items-center border-b border-slate-800/80 bg-slate-950/50">
           <Link href="/" className="flex items-center gap-2.5 group">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform">
               <Activity className="w-4 h-4 text-white" />
             </div>
             <div className="flex flex-col">
               <span className="font-bold text-white tracking-tight text-base leading-none">
-                Quant<span className="text-blue-500">Antigravity</span>
+                J<span className="text-blue-500">quant</span>
               </span>
-              <span className="text-[10px] text-slate-400 font-mono tracking-wider">KIS v2.0 Web</span>
+              <span className="text-[10px] text-slate-400 font-mono tracking-wider">ver 1.0</span>
             </div>
           </Link>
-
-          {/* 사이드바 열기/닫기 토글 버튼 */}
-          <button
-            onClick={onToggleMerge}
-            title="사이드바 열기/닫기"
-            style={{
-              background: 'rgba(255, 255, 255, 0.92)',
-              border: '1px solid rgba(255, 255, 255, 0.4)',
-              borderRadius: '8px',
-              padding: '4px 8px',
-              cursor: 'pointer',
-              color: 'rgb(0, 100, 0)',
-              fontSize: '1rem',
-              display: 'inline-flex',
-              alignItems: 'center',
-            }}
-          >
-            <i className="bi bi-layout-sidebar" />
-          </button>
         </div>
 
         {/* ══ 오늘 날짜 시계 & 장 상태 (좌측 메뉴 삽입 - Requirement 5) ══ */}

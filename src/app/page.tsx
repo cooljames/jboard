@@ -10,14 +10,15 @@ import { formatKRW } from '@/lib/utils';
 
 export default function DashboardPage() {
   const [balance, setBalance] = useState({
-    totalAsset: 104500000,
-    cashBalance: 42500000,
-    stockValuation: 62000000,
-    dailyPnl: 1450000,
+    totalAsset: 0,
+    cashBalance: 0,
+    stockValuation: 0,
+    dailyPnl: 0,
     positions: [] as PositionItem[],
   });
   const [strategies, setStrategies] = useState<any[]>([]);
   const [orders, setOrders] = useState<OrderItem[]>([]);
+  const [geminiModel, setGeminiModel] = useState('Gemini 3.8 Flash');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -42,6 +43,24 @@ export default function DashboardPage() {
       if (oRes.ok) {
         const oData = await oRes.json();
         setOrders(oData.orders || []);
+      }
+
+      // 4. Fetch settings for real Gemini model name
+      const setRes = await fetch('/api/settings');
+      if (setRes.ok) {
+        const setData = await setRes.json();
+        if (setData.gemini?.model) {
+          const raw = setData.gemini.model;
+          const parts = raw.split('-');
+          if (parts.length >= 3) {
+            const brand = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+            const ver = parts[1];
+            const tier = parts.slice(2).map((p: string) => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+            setGeminiModel(`${brand} ${ver} ${tier}`);
+          } else {
+            setGeminiModel(raw);
+          }
+        }
       }
     } catch (err) {
       console.error('Failed to fetch dashboard data:', err);
@@ -87,8 +106,8 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-2xl font-extrabold text-slate-100 tracking-tight flex items-center gap-2">
             <span>Trading Control Tower</span>
-            <span className="text-xs font-mono font-medium px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
-              LIVE
+            <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
+              Jquant ver 1.0
             </span>
           </h1>
           <p className="text-xs text-slate-400 mt-1">
@@ -117,6 +136,34 @@ export default function DashboardPage() {
             전략 교체 및 튜닝
           </Link>
         </div>
+      </div>
+
+      {/* ══ Gemini AI Engine Real Setting Status Card ══ */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-gradient-to-r from-indigo-950/40 to-slate-900/60 border border-indigo-500/30 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 flex-shrink-0">
+            <Zap className="w-4 h-4 text-indigo-400" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-white text-xs">AI 멀티모달 하이브리드 필터 엔진:</span>
+              <span className="font-mono text-xs font-bold text-indigo-300 bg-indigo-500/15 px-2 py-0.5 rounded border border-indigo-500/30">
+                {geminiModel}
+              </span>
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" title="엔진 정상 활성화" />
+            </div>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              현재 시스템 환경설정에 지정된 실제 AI 모델이 퀀트 후보 종목의 재무 및 차트 패턴을 2차 정밀 심사합니다.
+            </p>
+          </div>
+        </div>
+
+        <Link
+          href="/settings"
+          className="flex-shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 px-3 py-1.5 rounded-lg border border-indigo-500/20 transition-colors"
+        >
+          엔진 설정 변경 <ArrowRight className="w-3 h-3" />
+        </Link>
       </div>
 
       {/* Account Metric Summary Cards */}

@@ -315,39 +315,11 @@ class KisClient {
   async getAccountBalance(): Promise<KisAccountBalance> {
     if (!this.isConfigured()) {
       return {
-        totalAsset: 104500000,
-        cashBalance: 42500000,
-        stockValuation: 62000000,
-        dailyPnl: 1450000,
-        positions: [
-          {
-            ticker: '005930',
-            tickerName: '삼성전자',
-            quantity: 500,
-            avgBuyPrice: 59800,
-            currentPrice: 61500,
-            unrealizedPnl: 850000,
-            returnPct: 2.84,
-          },
-          {
-            ticker: '000660',
-            tickerName: 'SK하이닉스',
-            quantity: 120,
-            avgBuyPrice: 181000,
-            currentPrice: 184500,
-            unrealizedPnl: 420000,
-            returnPct: 1.93,
-          },
-          {
-            ticker: '035420',
-            tickerName: 'NAVER',
-            quantity: 50,
-            avgBuyPrice: 168400,
-            currentPrice: 172000,
-            unrealizedPnl: 180000,
-            returnPct: 2.14,
-          },
-        ],
+        totalAsset: 0,
+        cashBalance: 0,
+        stockValuation: 0,
+        dailyPnl: 0,
+        positions: [],
       };
     }
 
@@ -413,39 +385,11 @@ class KisClient {
 
   private getMockBalance(): KisAccountBalance {
     return {
-      totalAsset: 104500000,
-      cashBalance: 42500000,
-      stockValuation: 62000000,
-      dailyPnl: 1450000,
-      positions: [
-        {
-          ticker: '005930',
-          tickerName: '삼성전자',
-          quantity: 500,
-          avgBuyPrice: 59800,
-          currentPrice: 61500,
-          unrealizedPnl: 850000,
-          returnPct: 2.84,
-        },
-        {
-          ticker: '000660',
-          tickerName: 'SK하이닉스',
-          quantity: 120,
-          avgBuyPrice: 181000,
-          currentPrice: 184500,
-          unrealizedPnl: 420000,
-          returnPct: 1.93,
-        },
-        {
-          ticker: '035420',
-          tickerName: 'NAVER',
-          quantity: 50,
-          avgBuyPrice: 168400,
-          currentPrice: 172000,
-          unrealizedPnl: 180000,
-          returnPct: 2.14,
-        },
-      ],
+      totalAsset: 0,
+      cashBalance: 0,
+      stockValuation: 0,
+      dailyPnl: 0,
+      positions: [],
     };
   }
 

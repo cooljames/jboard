@@ -3,8 +3,8 @@ import type { Metadata } from 'next';
 import { LayoutShell } from '@/components/layout-shell';
 
 export const metadata: Metadata = {
-  title: 'QuantAntigravity-KIS Web v2.0.0 | Dynamic Quant Trading Tower',
-  description: 'KIS Open API + Neon Serverless + Gemini 2.0 Flash Dynamic Multi-Strategy Trading Platform',
+  title: 'Jquant ver 1.0 | 퀀트 알고리즘 트레이딩 플랫폼',
+  description: 'Jquant ver 1.0 - KIS 실시간 연동 & Gemini AI 멀티모달 퀀트 플랫폼',
 };
 
 export default function RootLayout({

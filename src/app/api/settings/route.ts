@@ -1,12 +1,7 @@
 import { NextResponse } from 'next/server';
 import { kisClient } from '@/lib/kis-client';
 import { GoogleGenAI } from '@google/genai';
-
-// In-memory runtime settings store (persists across requests in node process)
-let currentGeminiConfig = {
-  apiKey: process.env.GEMINI_API_KEY || '',
-  model: process.env.MODEL || 'gemini-3.8-flash',
-};
+import { getGeminiConfig, updateGeminiConfig } from '@/lib/gemini-config';
 
 function maskString(str: string, keepStart = 4, keepEnd = 4): string {
   if (!str || str.length <= keepStart + keepEnd) return '••••••••';
@@ -15,6 +10,7 @@ function maskString(str: string, keepStart = 4, keepEnd = 4): string {
 
 export async function GET() {
   const kisConfig = kisClient.getConfig();
+  const currentGeminiConfig = getGeminiConfig();
 
   return NextResponse.json({
     kis: {
@@ -102,8 +98,9 @@ export async function POST(request: Request) {
     // Action 2: Test Gemini AI Connection (v3.0 ~ v3.8 Flash)
     if (action === 'test_gemini') {
       const startTime = Date.now();
-      const testApiKey = gemini?.apiKey || currentGeminiConfig.apiKey;
-      const targetModel = gemini?.model || currentGeminiConfig.model || 'gemini-3.8-flash';
+      const currentGemini = getGeminiConfig();
+      const testApiKey = gemini?.apiKey || currentGemini.apiKey;
+      const targetModel = gemini?.model || currentGemini.model || 'gemini-3.8-flash';
 
       if (!testApiKey) {
         return NextResponse.json({
@@ -168,14 +165,16 @@ export async function POST(request: Request) {
       }
 
       if (gemini) {
+        const geminiUpdate: any = {};
         if (gemini.apiKey && !gemini.apiKey.includes('•')) {
-          currentGeminiConfig.apiKey = gemini.apiKey.trim();
+          geminiUpdate.apiKey = gemini.apiKey.trim();
           process.env.GEMINI_API_KEY = gemini.apiKey.trim();
         }
         if (gemini.model) {
-          currentGeminiConfig.model = gemini.model.trim();
+          geminiUpdate.model = gemini.model.trim();
           process.env.MODEL = gemini.model.trim();
         }
+        updateGeminiConfig(geminiUpdate);
       }
 
       return NextResponse.json({

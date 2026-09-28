@@ -37,7 +37,9 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
   const [panicModalOpen, setPanicModalOpen] = useState(false);
   const [panicResult, setPanicResult] = useState<string | null>(null);
 
-  // Restore merge/split and theme state from localStorage on mount
+  const [geminiModel, setGeminiModel] = useState('gemini-3.8-flash');
+
+  // Restore merge/split and theme state from localStorage on mount & load gemini model
   useEffect(() => {
     try {
       const savedMerge = localStorage.getItem('jquant_menu_merged');
@@ -48,6 +50,13 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
       const savedTheme = (localStorage.getItem('jquant_theme') as 'dark' | 'light') || 'dark';
       setTheme(savedTheme);
       document.documentElement.classList.toggle('dark', savedTheme === 'dark');
+
+      fetch('/api/settings')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.gemini?.model) setGeminiModel(data.gemini.model);
+        })
+        .catch(() => {});
     } catch {}
   }, []);
 
@@ -87,7 +96,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
   };
 
   const pageInfo = PAGE_TITLES[pathname] || {
-    title: 'QuantAntigravity-KIS Web v2.0.0',
+    title: 'Jquant ver 1.0',
     subtitle: 'Dynamic Quant Trading & AI Analytics Platform',
   };
 
@@ -183,15 +192,15 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        {/* Main Content Area */}
-        <main className="flex-1 w-full max-w-[1600px] mx-auto px-4 sm:px-6 py-6 transition-all duration-300">
+        {/* Main Content Area - True Full-Screen Fluid Layout without giant side gaps */}
+        <main className={`flex-1 w-full ${isMerged ? 'px-3 sm:px-6 md:px-8' : 'px-3 sm:px-6'} py-6 transition-all duration-200`}>
           {children}
         </main>
 
         {/* Global Footer */}
         <footer className="border-t border-slate-900 bg-slate-950/40 py-5 text-center text-xs text-slate-500 font-mono">
-          <div className="max-w-[1600px] mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-            <div>QuantAntigravity-KIS Web v2.0.0 Monorepo</div>
+          <div className="w-full px-4 sm:px-8 flex flex-col sm:flex-row items-center justify-between gap-2">
+            <div>Jquant ver 1.0</div>
             <div className="flex items-center gap-4 text-[11px]">
               <span className="flex items-center gap-1 text-slate-400">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Neon Postgres
@@ -200,7 +209,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> KIS 20 TPS Limiter
               </span>
               <span className="flex items-center gap-1 text-slate-400">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-400" /> Gemini 2.0 Flash
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-400" /> {geminiModel}
               </span>
             </div>
           </div>

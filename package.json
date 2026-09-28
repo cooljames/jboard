@@ -1,8 +1,8 @@
 {
-  "name": "quant-kis-system-v2",
-  "version": "2.0.0",
+  "name": "jquant",
+  "version": "1.0.0",
   "private": true,
-  "description": "QuantAntigravity-KIS Web v2.0.0 - Dynamic Strategy Auto-Trading & AI Analytics Platform",
+  "description": "Jquant ver 1.0 - Dynamic Strategy Auto-Trading & AI Analytics Platform",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
