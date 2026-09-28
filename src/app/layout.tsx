@@ -14,6 +14,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ko" className="dark">
+      <head>
+        <link
+          rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+        />
+      </head>
       <body className="min-h-screen bg-[#090d16] text-slate-100 antialiased selection:bg-blue-600 selection:text-white">
         <LayoutShell>{children}</LayoutShell>
       </body>

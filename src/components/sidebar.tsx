@@ -150,13 +150,23 @@ export function Sidebar({ isMerged, onToggleMerge, onOpenPanicModal, theme, onTo
             </div>
           </Link>
 
-          {/* 창 버튼 (우측 화면으로 머지 / 사이드바 닫기) */}
+          {/* 사이드바 열기/닫기 토글 버튼 */}
           <button
             onClick={onToggleMerge}
-            title="창 접기 / 우측 화면으로 머지"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/80 transition-all cursor-pointer border border-transparent hover:border-slate-700"
+            title="사이드바 열기/닫기"
+            style={{
+              background: 'rgba(255, 255, 255, 0.92)',
+              border: '1px solid rgba(255, 255, 255, 0.4)',
+              borderRadius: '8px',
+              padding: '4px 8px',
+              cursor: 'pointer',
+              color: 'rgb(0, 100, 0)',
+              fontSize: '1rem',
+              display: 'inline-flex',
+              alignItems: 'center',
+            }}
           >
-            <PanelLeftClose className="w-4 h-4 text-slate-300" />
+            <i className="bi bi-layout-sidebar" />
           </button>
         </div>
 

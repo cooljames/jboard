@@ -107,27 +107,23 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
         {/* Top Header */}
         <header className="sticky top-0 z-30 h-16 border-b border-slate-800 bg-slate-950/80 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
-            {/* 창 버튼 (우측 화면 머지 / 좌측 메뉴 열기 토글) */}
+            {/* 사이드바 열기/닫기 토글 버튼 */}
             <button
               onClick={handleToggleMerge}
-              className={`p-2 rounded-xl border transition-all cursor-pointer flex items-center gap-1.5 ${
-                isMerged
-                  ? 'bg-blue-600/15 border-blue-500/30 text-blue-400 hover:bg-blue-600/25'
-                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
-              }`}
-              title={isMerged ? '좌측 메뉴 펼치기 (분할 모드)' : '우측 화면으로 머지 (전체화면 모드)'}
+              title="사이드바 열기/닫기"
+              style={{
+                background: 'rgba(255, 255, 255, 0.92)',
+                border: '1px solid rgba(255, 255, 255, 0.4)',
+                borderRadius: '8px',
+                padding: '4px 8px',
+                cursor: 'pointer',
+                color: 'rgb(0, 100, 0)',
+                fontSize: '1rem',
+                display: 'inline-flex',
+                alignItems: 'center',
+              }}
             >
-              {isMerged ? (
-                <>
-                  <PanelLeftOpen className="w-4 h-4 text-blue-400" />
-                  <span className="text-xs font-semibold hidden md:inline">메뉴 열기</span>
-                </>
-              ) : (
-                <>
-                  <PanelLeftClose className="w-4 h-4 text-slate-300" />
-                  <span className="text-xs font-medium hidden md:inline text-slate-400">화면 머지</span>
-                </>
-              )}
+              <i className={`bi ${isMerged ? 'bi-layout-sidebar' : 'bi-layout-sidebar-inset'}`} />
             </button>
 
             {/* Current Page Title */}
