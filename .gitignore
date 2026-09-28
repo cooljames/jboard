@@ -1,6 +1,20 @@
 node_modules/
 dist/
+.next/
+out/
 .DS_Store
 *.local
 .env
 .env.*
+!.env.local.example
+
+# Python
+python_engine/venv/
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.parquet
+
+# Drizzle migrations local cache
+drizzle/
