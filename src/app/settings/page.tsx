@@ -414,31 +414,57 @@ export default function SettingsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                    기본 AI 분석 모델 (Model Selection)
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-medium text-slate-300">
+                      기본 AI 분석 엔진 모델 (Gemini 3.0 ~ 3.8 Flash Series)
+                    </label>
+                    <span className="text-[11px] font-mono text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
+                      최신 v3.8 지원
+                    </span>
+                  </div>
                   <select
                     value={geminiModel}
                     onChange={(e) => setGeminiModel(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-indigo-500 font-mono"
                   >
-                    <option value="gemini-2.0-flash">gemini-2.0-flash (초고속 멀티모달 &amp; 구조화 분석 - 권장)</option>
-                    <option value="gemini-1.5-flash">gemini-1.5-flash (경량 고속 모델)</option>
-                    <option value="gemini-1.5-pro">gemini-1.5-pro (심층 추론 및 거대 컨텍스트)</option>
-                    <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite (최신 고효율)</option>
+                    <optgroup label="── 최신 플래그십 (v3.8 Series) ──">
+                      <option value="gemini-3.8-flash">gemini-3.8-flash (Gemini 3.8 Flash - 최신 플래그십 초고속 퀀트 &amp; 차트 멀티모달 / 권장)</option>
+                      <option value="gemini-3.8-flash-lite">gemini-3.8-flash-lite (Gemini 3.8 Flash Lite - 극초저지연 뉴스 감성 &amp; 스캘핑 특화)</option>
+                      <option value="gemini-3.8-pro">gemini-3.8-pro (Gemini 3.8 Pro - 복합 퀀트 멀티팩터 심층 추론)</option>
+                    </optgroup>
+                    <optgroup label="── 고성능 분석 (v3.5 Series) ──">
+                      <option value="gemini-3.5-flash">gemini-3.5-flash (Gemini 3.5 Flash - 고속 차트 패턴 &amp; 퀀트 시그널 생성)</option>
+                      <option value="gemini-3.5-pro">gemini-3.5-pro (Gemini 3.5 Pro - 대용량 재무제표 &amp; 공시 심층 분석)</option>
+                    </optgroup>
+                    <optgroup label="── 경량 고효율 (v3.1 &amp; v3.0 Series) ──">
+                      <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite (Gemini 3.1 Flash Lite - 저지연 고효율 퀀트 필터)</option>
+                      <option value="gemini-3.0-flash">gemini-3.0-flash (Gemini 3.0 Flash - 3.0 베이스라인 플래시)</option>
+                      <option value="gemini-3.0-pro">gemini-3.0-pro (Gemini 3.0 Pro - 3.0 딥 퀀트 분석 엔진)</option>
+                    </optgroup>
                   </select>
                 </div>
 
-                <div className="p-3 bg-slate-950/40 rounded-xl border border-slate-800/80 text-xs text-slate-400 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-500">지원 기능:</span>
-                    <span className="text-slate-300 font-mono text-[11px]">TradingView 차트 멀티모달 추론, JSON 스키마</span>
+                <div className="p-3.5 bg-slate-950/50 rounded-xl border border-slate-800/80 text-xs text-slate-300 space-y-2">
+                  <div className="flex items-center justify-between text-[11px] pb-1.5 border-b border-slate-800/60">
+                    <span className="text-slate-400 font-medium">선택된 엔진 특화 기능:</span>
+                    <span className="text-indigo-400 font-mono font-semibold">{geminiModel}</span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-500">지연 속도 목표:</span>
-                    <span className="text-indigo-400 font-mono text-[11px]">Sub-500ms Flash Inference</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
+                    <div className="p-2 rounded bg-slate-900/60 border border-slate-800/60">
+                      <div className="text-slate-400">차트 멀티모달</div>
+                      <div className="text-white font-medium mt-0.5">봉차트 패턴 &amp; 지지/저항</div>
+                    </div>
+                    <div className="p-2 rounded bg-slate-900/60 border border-slate-800/60">
+                      <div className="text-slate-400">뉴스 감성 분석</div>
+                      <div className="text-white font-medium mt-0.5">실시간 호악재 수치화</div>
+                    </div>
+                    <div className="p-2 rounded bg-slate-900/60 border border-slate-800/60">
+                      <div className="text-slate-400">퀀트 시그널</div>
+                      <div className="text-indigo-400 font-medium mt-0.5">BUY / HOLD / AVOID</div>
+                    </div>
                   </div>
                 </div>
+
               </div>
             </div>
 

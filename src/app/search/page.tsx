@@ -89,10 +89,13 @@ export default function SearchPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-100 tracking-tight flex items-center gap-2">
-            <span>Smart Stock Search & AI Diagnosis</span>
+            <span>스마트 종목 검색 &amp; AI 진단</span>
+            <span className="text-xs px-2.5 py-1 rounded-full font-mono bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+              Gemini 3.0 ~ 3.8 Flash
+            </span>
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            TradingView 차트 분석 및 Google Gemini 2.0 Flash 멀티모달 퀀트 AI 심층 진단
+            TradingView 차트 분석 및 Google Gemini AI (3.0 ~ 3.8 Flash) 멀티모달 퀀트 진단 &amp; 뉴스 감성 시그널링
           </p>
         </div>
 
@@ -182,26 +185,26 @@ export default function SearchPage() {
                   <Sparkles className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-100 text-sm">Gemini 2.0 Flash AI 진단</h3>
-                  <p className="text-[11px] text-slate-400 font-mono">Multimodal Structured AI</p>
+                  <h3 className="font-bold text-slate-100 text-sm">Google Gemini AI 진단 엔진</h3>
+                  <p className="text-[11px] text-indigo-400 font-mono">v3.0 ~ v3.8 Flash Multimodal</p>
                 </div>
               </div>
             </div>
 
             <p className="text-xs text-slate-300 leading-relaxed">
               Google Gen AI SDK를 통해 <strong>{selectedName} ({selectedTicker})</strong>의 
-              재무 지표, 외국인/기관 수급, 최근 차트 형태를 종합 심사하여 객관적인 퀀트 투자의견을 산출합니다.
+              재무 지표, 외국인/기관 수급, 최근 차트 형태를 종합 심사하여 객관적인 퀀트 투자의견 및 뉴스 감성 시그널을 산출합니다.
             </p>
 
             <button
               onClick={handleRunAiAnalysis}
               disabled={aiLoading}
-              className="w-full py-2.5 px-4 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+              className="w-full py-2.5 px-4 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer"
             >
               {aiLoading ? (
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin" />
-                  Gemini 2.0 심사 분석 중...
+                  Gemini AI 심사 분석 중...
                 </>
               ) : (
                 <>

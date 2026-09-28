@@ -5,7 +5,7 @@ import { GoogleGenAI } from '@google/genai';
 // In-memory runtime settings store (persists across requests in node process)
 let currentGeminiConfig = {
   apiKey: process.env.GEMINI_API_KEY || '',
-  model: process.env.MODEL || 'gemini-2.0-flash',
+  model: process.env.MODEL || 'gemini-3.8-flash',
 };
 
 function maskString(str: string, keepStart = 4, keepEnd = 4): string {
@@ -99,11 +99,11 @@ export async function POST(request: Request) {
       }
     }
 
-    // Action 2: Test Gemini AI Connection
+    // Action 2: Test Gemini AI Connection (v3.0 ~ v3.8 Flash)
     if (action === 'test_gemini') {
       const startTime = Date.now();
       const testApiKey = gemini?.apiKey || currentGeminiConfig.apiKey;
-      const testModel = gemini?.model || currentGeminiConfig.model;
+      const targetModel = gemini?.model || currentGeminiConfig.model || 'gemini-3.8-flash';
 
       if (!testApiKey) {
         return NextResponse.json({
@@ -114,10 +114,22 @@ export async function POST(request: Request) {
 
       try {
         const ai = new GoogleGenAI({ apiKey: testApiKey });
-        const response = await ai.models.generateContent({
-          model: testModel || 'gemini-2.0-flash',
-          contents: '간단히 "안녕하세요! Gemini AI 연결이 정상입니다."라고 한국어로 한 문장만 답해줘.',
-        });
+        let actualModelUsed = targetModel;
+        let response;
+
+        try {
+          response = await ai.models.generateContent({
+            model: actualModelUsed,
+            contents: '간단히 "안녕하세요! Gemini AI 연결이 정상입니다."라고 한국어로 한 문장만 답해줘.',
+          });
+        } catch (mErr: any) {
+          console.warn(`[Gemini Test] Model ${targetModel} issue: ${mErr.message}. Fallback to stable model...`);
+          actualModelUsed = 'gemini-2.0-flash';
+          response = await ai.models.generateContent({
+            model: actualModelUsed,
+            contents: '간단히 "안녕하세요! Gemini AI 연결이 정상입니다."라고 한국어로 한 문장만 답해줘.',
+          });
+        }
 
         const latency = Date.now() - startTime;
         const text = response.text || '연결 성공';
@@ -125,7 +137,7 @@ export async function POST(request: Request) {
         return NextResponse.json({
           success: true,
           latency,
-          message: `Gemini AI 연결 성공 (${latency}ms)`,
+          message: `Gemini AI (${actualModelUsed}) 연결 성공 (${latency}ms)`,
           reply: text.trim(),
         });
       } catch (err: any) {
@@ -136,6 +148,7 @@ export async function POST(request: Request) {
         });
       }
     }
+
 
     // Action 3: Save Configurations
     if (action === 'save') {

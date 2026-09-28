@@ -46,17 +46,33 @@ export async function POST(request: Request) {
           }
         `;
 
-        const response = await ai.models.generateContent({
-          model: 'gemini-2.0-flash',
-          contents: prompt,
-          config: {
-            responseMimeType: 'application/json',
-            temperature: 0.2,
-          },
-        });
+        const selectedModel = (body.model || process.env.MODEL || 'gemini-3.8-flash').trim();
+
+        let response;
+        try {
+          response = await ai.models.generateContent({
+            model: selectedModel,
+            contents: prompt,
+            config: {
+              responseMimeType: 'application/json',
+              temperature: 0.2,
+            },
+          });
+        } catch (mErr: any) {
+          console.warn(`[Gemini AI] Model ${selectedModel} attempt: ${mErr.message}. Retrying with fallback model...`);
+          response = await ai.models.generateContent({
+            model: 'gemini-2.0-flash',
+            contents: prompt,
+            config: {
+              responseMimeType: 'application/json',
+              temperature: 0.2,
+            },
+          });
+        }
 
         const text = response.text || '{}';
         analysisResult = JSON.parse(text);
+
       } catch (genAiError: any) {
         console.warn('[Gemini AI Node] API call failed, using heuristic analysis:', genAiError.message);
         analysisResult = {
