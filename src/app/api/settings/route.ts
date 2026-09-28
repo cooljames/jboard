@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { kisClient } from '@/lib/kis-client';
-import { GoogleGenAI } from '@google/genai';
 import { getGeminiConfig, updateGeminiConfig } from '@/lib/gemini-config';
 
 function maskString(str: string, keepStart = 4, keepEnd = 4): string {
@@ -110,6 +109,7 @@ export async function POST(request: Request) {
       }
 
       try {
+        const { GoogleGenAI } = await import('@google/genai');
         const ai = new GoogleGenAI({ apiKey: testApiKey });
         let actualModelUsed = targetModel;
         let response;
