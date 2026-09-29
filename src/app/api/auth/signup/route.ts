@@ -22,6 +22,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '비밀번호는 8자 이상 72자 이하로 입력해주세요.' }, { status: 400 });
     }
 
+    if (!process.env.DATABASE_URL) {
+      return NextResponse.json({
+        error: '서버 데이터베이스 설정(DATABASE_URL)이 누락되었습니다. Vercel 대시보드(Settings > Environment Variables)에 DATABASE_URL을 등록해주세요.',
+      }, { status: 500 });
+    }
+
     const db = getDb();
     const existing = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
     if (existing.length > 0) {
@@ -56,6 +62,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '이미 가입된 이메일입니다.' }, { status: 409 });
     }
     console.error('[Auth Signup] Error:', error);
-    return NextResponse.json({ error: '회원가입 중 오류가 발생했습니다.' }, { status: 500 });
+    const msg = error?.message || '회원가입 중 오류가 발생했습니다.';
+    return NextResponse.json({
+      error: !process.env.DATABASE_URL
+        ? '서버 데이터베이스 설정(DATABASE_URL)이 누락되었습니다. Vercel 대시보드(Settings > Environment Variables)에 DATABASE_URL을 등록해주세요.'
+        : `회원가입 오류: ${msg}`,
+    }, { status: 500 });
   }
 }
