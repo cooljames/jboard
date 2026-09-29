@@ -41,7 +41,9 @@ function toCooldownDTO(status: any) {
 async function buildStatus() {
   const status = await callWorker('/api/trading/status');
   const ws = getWorkerState();
+  const isServerless = !!process.env.VERCEL || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
   const base = {
+    isServerless,
     activeStrategies: status?.active_strategies || [],
     circuitBreakerTripped: !!status?.circuit_breaker_tripped,
     isPaperTrading: status?.is_paper_trading !== false,
@@ -75,14 +77,18 @@ export async function POST(request: Request) {
     const body = await request.json();
     action = String(body?.action || '').toLowerCase();
   } catch {
-    return NextResponse.json({ error: 'action이 필요합니다.' }, { status: 400 });
+    return NextResponse.json({ success: false, error: 'action이 필요합니다.' }, { status: 400 });
   }
 
   // 워커 프로세스 직접 부팅
   if (action === 'boot') {
     const booted = await bootWorker();
     if (!booted.ok) {
-      return NextResponse.json({ workerOnline: false, error: booted.message }, { status: 503 });
+      return NextResponse.json({
+        success: false,
+        workerOnline: false,
+        error: booted.message,
+      });
     }
     const ready = await waitForWorkerReady(30000);
     const status = await buildStatus();
@@ -98,13 +104,13 @@ export async function POST(request: Request) {
     const stopped = await stopWorker();
     const status = await buildStatus();
     if (!stopped.ok) {
-      return NextResponse.json({ ...status, error: stopped.message }, { status: 503 });
+      return NextResponse.json({ ...status, success: false, error: stopped.message });
     }
     return NextResponse.json({ ...status, success: true, shuttingDown: true, message: stopped.message });
   }
 
   if (action !== 'start' && action !== 'stop') {
-    return NextResponse.json({ error: 'action은 boot, start, stop, shutdown 중 하나여야 합니다.' }, { status: 400 });
+    return NextResponse.json({ success: false, error: 'action은 boot, start, stop, shutdown 중 하나여야 합니다.' }, { status: 400 });
   }
 
   const result = await callWorker(`/api/trading/${action}`, { method: 'POST' });
@@ -113,9 +119,11 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         ...status,
-        error: 'Python 워커에 연결할 수 없습니다. 워커 켜기 버튼으로 먼저 켜주세요.',
+        success: false,
+        error: status.isServerless
+          ? 'Vercel 서버리스 환경에서는 백그라운드 Python 워커가 실행되지 않습니다. 로컬 PC(run.bat)에서 실행해주세요.'
+          : 'Python 워커에 연결할 수 없습니다. 워커 켜기 버튼으로 먼저 켜주세요.',
       },
-      { status: 503 },
     );
   }
   return NextResponse.json({

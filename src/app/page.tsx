@@ -64,7 +64,8 @@ export default function DashboardPage() {
         const tData = await fetchJson<any>('/api/auto-trading');
         setAutoTrade({
           enabled: !!tData.enabled,
-          workerOnline: tData.workerOnline !== false,
+          workerOnline: !!tData.workerOnline,
+          isServerless: !!tData.isServerless,
           activeStrategies: tData.activeStrategies || [],
           circuitBreakerTripped: !!tData.circuitBreakerTripped,
           isPaperTrading: tData.isPaperTrading !== false,
@@ -143,6 +144,18 @@ export default function DashboardPage() {
 
   const handleToggleAutoTrading = async () => {
     if (autoBusy) return;
+
+    // 클라우드(Vercel) 배포 시 워커 미연결 안내
+    if (!autoTrade.workerOnline && autoTrade.isServerless) {
+      alert(
+        '【클라우드(Vercel) 배포 안내】\n\n' +
+        'Vercel 서버리스 환경에서는 백그라운드 Python 워커(FastAPI)를 직접 실행할 수 없습니다.\n\n' +
+        '✔ 로컬 PC에서 실행: 프로젝트 폴더의 "run.bat" 또는 "Jquant.exe"를 실행하시면 http://localhost:3000 에서 바로 원클릭 자동매매가 가능합니다.\n\n' +
+        '✔ 클라우드 연동: 외부 서버나 로컬 터널(ngrok, Cloudflare 등)로 오픈된 워커 주소를 Vercel의 PYTHON_WORKER_URL 환경변수로 연결할 수 있습니다.'
+      );
+      return;
+    }
+
     // 워커 꺼짐 → 워커 켜기(부팅). 켜짐 → 매매 시작/중지 게이트.
     const action = !autoTrade.workerOnline ? 'boot' : autoTrade.enabled ? 'stop' : 'start';
     if (action === 'start') {
@@ -160,10 +173,11 @@ export default function DashboardPage() {
         body: JSON.stringify({ action }),
       });
       const data = await res.json();
-      if (res.ok && data.workerOnline !== false) {
+      if (res.ok && data.success !== false && data.workerOnline !== false) {
         setAutoTrade({
           enabled: !!data.enabled,
           workerOnline: true,
+          isServerless: !!data.isServerless,
           activeStrategies: data.activeStrategies || [],
           circuitBreakerTripped: !!data.circuitBreakerTripped,
           isPaperTrading: data.isPaperTrading !== false,

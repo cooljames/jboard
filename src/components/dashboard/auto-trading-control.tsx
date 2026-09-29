@@ -16,6 +16,7 @@ export interface AutoTradingStatus {
   activeStrategies: string[];
   circuitBreakerTripped: boolean;
   isPaperTrading: boolean;
+  isServerless?: boolean;
   orderCooldown?: OrderCooldownState;
   managed?: boolean;
   pid?: number | null;
@@ -56,7 +57,9 @@ export function AutoTradingControl({ status, busy, message, onToggle, onShutdown
     : busy
       ? '처리 중...'
       : !workerOnline
-        ? '워커 켜기'
+        ? status.isServerless
+          ? '워커 연동 안내'
+          : '워커 켜기'
         : '자동매매 시작';
 
   return (
@@ -99,7 +102,9 @@ export function AutoTradingControl({ status, busy, message, onToggle, onShutdown
                 ? `워커 연결됨${status.pid ? ` (PID ${status.pid} · 가동 ${formatUptime(status.uptimeSec)})` : ''} · 활성 전략 ${status.activeStrategies.length}개${
                     status.circuitBreakerTripped ? ' · ⚠️ 서킷브레이커 발동(신규매수 중단)' : ''
                   }`
-                : '워커 꺼짐 — 우측 흰색 버튼으로 터미널 없이 바로 켤 수 있습니다.'}
+                : status.isServerless
+                  ? '클라우드(Vercel) 배포 모드: Python 워커는 로컬 PC(run.bat) 또는 외부 서버에서 실행해야 합니다.'
+                  : '워커 꺼짐 — 우측 흰색 버튼으로 터미널 없이 바로 켤 수 있습니다.'}
             </p>
             {message && <p className="text-xs text-blue-300 mt-1 font-medium">{message}</p>}
             {workerOnline && status.orderCooldown?.paused && status.orderCooldown.pauseReason && (
