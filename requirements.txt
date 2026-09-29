@@ -1,6 +1,6 @@
 # Jquant Python Engine Dependencies
 fastapi>=0.115.0
-uvicorn>=0.30.0
+uvicorn[standard]>=0.30.0
 httpx>=0.27.0
 pydantic>=2.8.0
 pydantic-settings>=2.4.0
@@ -8,5 +8,9 @@ python-dotenv>=1.0.1
 websockets>=13.0
 pandas>=2.2.0
 numpy>=1.26.0
-google-genai>=2.0.0
+google-genai>=0.1.1
 asyncpg>=0.29.0
+psycopg2-binary>=2.9.9
+pytz>=2024.1
+finance-datareader>=0.9.90
+pykrx>=1.0.45
