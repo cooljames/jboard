@@ -1,21 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "services": {
-    "app": {
-      "root": ".",
-      "framework": "nextjs"
-    },
-    "python_engine": {
-      "root": "python_engine",
-      "framework": "fastapi"
-    }
-  },
-  "rewrites": [
+  "framework": "nextjs",
+  "buildCommand": "next build",
+  "crons": [
     {
-      "source": "/(.*)",
-      "destination": {
-        "service": "app"
-      }
+      "path": "/api/cron/trading",
+      "schedule": "*/5 0-7 * * 1-5"
     }
   ]
 }

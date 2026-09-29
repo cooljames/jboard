@@ -1,0 +1,22 @@
+# Desktop executables and scripts
+*.exe
+*.cs
+*.bat
+Jquant.cs
+Jquant.exe
+jquantinstall.bat
+jquantinstall.cs
+jquantinstall.exe
+run.bat
+run.exe
+run.js
+start.bat
+
+# Python local environment and large caches
+python_engine/venv/
+.venv/
+__pycache__/
+*.pyc
+*.parquet
+.kis_token_cache.json
+drizzle/

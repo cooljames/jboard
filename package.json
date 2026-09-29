@@ -4,6 +4,7 @@
   "private": true,
   "description": "Jquant ver 1.0 - Dynamic Strategy Auto-Trading & AI Analytics Platform",
   "scripts": {
+    "run": "node run.js",
     "dev": "node scripts/dev.js",
     "dev:next": "next dev",
     "kill-port": "node scripts/kill-port.js",
