@@ -71,10 +71,17 @@ export default function AdminPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, role, status }),
       });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setNotice('✅ 회원 정보가 성공적으로 변경되었습니다.');
         setTimeout(() => setNotice(null), 3000);
         fetchMembers();
+      } else if (res.status === 401) {
+        setNotice('🔒 로그인이 필요합니다. 우측 상단에서 로그인하세요.');
+        setTimeout(() => setNotice(null), 4000);
+      } else {
+        setNotice(`❌ 수정 실패: ${data.error || '오류 발생'}`);
+        setTimeout(() => setNotice(null), 4000);
       }
     } catch (err: any) {
       alert(`수정 실패: ${err.message}`);
@@ -85,10 +92,14 @@ export default function AdminPage() {
     if (!confirm('정말로 이 회원을 삭제하시겠습니까?')) return;
     try {
       const res = await fetch(`/api/admin/members?id=${id}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setMembers((prev) => prev.filter((m) => m.id !== id));
         setNotice('회원이 삭제되었습니다.');
         setTimeout(() => setNotice(null), 3000);
+      } else {
+        setNotice(`❌ 삭제 실패: ${data.error || '오류 발생'}`);
+        setTimeout(() => setNotice(null), 4000);
       }
     } catch (err: any) {
       alert(`삭제 실패: ${err.message}`);

@@ -21,10 +21,9 @@ export function Navbar() {
   const [panicResult, setPanicResult] = useState<string | null>(null);
 
   const navItems = [
-    { label: 'Control Tower', href: '/', icon: BarChart3 },
-    { label: 'Dynamic Strategies', href: '/strategies', icon: Sliders },
-    { label: 'Smart Search & AI', href: '/search', icon: Search },
-    { label: 'Orders & Trading', href: '/trading', icon: ArrowLeftRight },
+    { label: '컨트롤 타워', href: '/', icon: BarChart3 },
+    { label: '동적 전략', href: '/strategies', icon: Sliders },
+    { label: '실시간 검색 & 주문', href: '/trading', icon: ArrowLeftRight },
   ];
 
   const handleExecutePanic = async () => {
@@ -73,7 +72,7 @@ export function Navbar() {
           <nav className="flex items-center gap-1 sm:gap-2">
             {navItems.map((item) => {
               const Icon = item.icon;
-              const isActive = pathname === item.href;
+              const isActive = pathname === item.href || (item.href === '/trading' && pathname === '/search');
               return (
                 <Link
                   key={item.href}

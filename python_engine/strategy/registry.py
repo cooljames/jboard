@@ -28,6 +28,15 @@ class StrategyRegistry:
             enabled = item.get("enabled", False)
             weight = float(item.get("allocation_weight", 0.2))
 
+            if enabled and strat_id not in cls._registry:
+                # DB에서는 켜져 있지만 워커 코드에 없음 → 구버전 워커 실행 중. 재시작 필요.
+                logger.warning(
+                    f"[Strategy Registry] '{strat_id}' is ENABLED in DB but not registered "
+                    f"in this worker (known: {sorted(cls._registry)}). "
+                    f"워커를 재시작(끄기→켜기)하여 최신 코드를 로드하세요."
+                )
+                continue
+
             if enabled and strat_id in cls._registry:
                 strategy_cls = cls._registry[strat_id]
                 instance = strategy_cls(
@@ -41,11 +50,11 @@ class StrategyRegistry:
 
     @classmethod
     def get_active_strategies(cls) -> Dict[str, BaseStrategy]:
-        return cls._active_instances
+        return dict(cls._active_instances)
 
     @classmethod
     def get_strategy_weights(cls) -> Dict[str, float]:
-        return cls._weights
+        return dict(cls._weights)
 
     @classmethod
     def update_strategy_in_memory(cls, strategy_id: str, params: Optional[Dict[str, Any]] = None, enabled: Optional[bool] = None, weight: Optional[float] = None):

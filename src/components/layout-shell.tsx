@@ -1,32 +1,40 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { fetchJson } from '@/lib/fetch-json';
 import { usePathname } from 'next/navigation';
 import { Sidebar } from './sidebar';
-import { 
-  PanelLeftOpen, 
-  PanelLeftClose, 
-  ShieldAlert, 
-  AlertTriangle, 
-  Activity, 
-  Zap, 
+import {
+  PanelLeftOpen,
+  PanelLeftClose,
+  ShieldAlert,
+  AlertTriangle,
+  Activity,
+  Zap,
   RotateCcw,
   CheckCircle2,
   X,
   Sun,
-  Moon
+  Moon,
+  LogIn,
+  LogOut,
+  UserRound
 } from 'lucide-react';
 
 
 const PAGE_TITLES: Record<string, { title: string; subtitle: string }> = {
   '/': { title: '컨트롤 타워 (종합 대시보드)', subtitle: '실시간 자산 추이, 퀀트 성과 및 KIS 20 TPS 엔진' },
   '/strategies': { title: '동적 퀀트 전략 컨트롤러', subtitle: '무중단 알고리즘 ON/OFF 및 가중치 동적 튜닝' },
-  '/search': { title: 'AI 스마트 종목 발굴 & 차트', subtitle: 'TradingView 인터랙티브 차트 및 Gemini 2.0 Flash 멀티모달 분석' },
-  '/trading': { title: '실시간 주문 & 매매', subtitle: 'KIS 수동 주문 체결, 실시간 잔고 현황 및 체결 감사 로그' },
+  '/search': { title: '실시간 검색 & 주문 체결', subtitle: '종목 실시간 발굴, TradingView 차트, Gemini AI 분석 및 KIS 수동 주문 체결' },
+  '/trading': { title: '실시간 검색 & 주문 체결', subtitle: '종목 실시간 발굴, TradingView 차트, Gemini AI 분석 및 KIS 수동 주문 체결' },
   '/board': { title: '커뮤니티 게시판', subtitle: '퀀트 알고리즘 연구, 매매 일지 및 자유로운 투자 의견 교환' },
   '/settings': { title: '시스템 환경 설정', subtitle: '한국투자증권(KIS) 및 Google Gemini AI API 키 통합 관리' },
   '/setting': { title: '시스템 환경 설정', subtitle: '한국투자증권(KIS) 및 Google Gemini AI API 키 통합 관리' },
   '/admin': { title: '통합 관리자 콘솔', subtitle: '시스템 킬스위치, KIS Token Bucket 처리량 및 인프라 모니터링' },
+  '/logs': { title: '매매 일지', subtitle: '자동매매 · 수동매매 · 비상청산 출처별 연속 체결 로그' },
+  '/login': { title: '로그인', subtitle: 'Jquant 회원 계정으로 접속' },
+  '/signup': { title: '회원가입', subtitle: 'Jquant 회원 계정 만들기' },
 };
 
 export function LayoutShell({ children }: { children: React.ReactNode }) {
@@ -38,6 +46,27 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
   const [panicResult, setPanicResult] = useState<string | null>(null);
 
   const [geminiModel, setGeminiModel] = useState('gemini-3.8-flash');
+
+  // 로그인 회원 상태
+  const [authUser, setAuthUser] = useState<{ id: number; email: string; name: string; role: string } | null>(null);
+
+  const fetchAuthUser = async () => {
+    try {
+      const data = await fetchJson<{ user: { id: number; email: string; name: string; role: string } | null }>('/api/auth/me');
+      setAuthUser(data.user || null);
+    } catch {
+      setAuthUser(null);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } finally {
+      setAuthUser(null);
+      window.location.href = '/login';
+    }
+  };
 
   // Restore merge/split and theme state from localStorage on mount & load gemini model
   useEffect(() => {
@@ -51,14 +80,20 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
       setTheme(savedTheme);
       document.documentElement.classList.toggle('dark', savedTheme === 'dark');
 
-      fetch('/api/settings')
-        .then((res) => res.json())
+      fetchJson<{ gemini?: { model?: string } }>('/api/settings')
         .then((data) => {
           if (data.gemini?.model) setGeminiModel(data.gemini.model);
         })
         .catch(() => {});
+
+      fetchAuthUser();
     } catch {}
   }, []);
+
+  // 페이지 이동 시마다 로그인 상태 재확인 (로그인/로그아웃 직후 헤더 반영용)
+  useEffect(() => {
+    fetchAuthUser();
+  }, [pathname]);
 
   const handleToggleMerge = () => {
     const nextState = !isMerged;
@@ -178,6 +213,38 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
               <span>KIS 20 TPS Limiter</span>
             </div>
 
+            {/* Auth: 회원 상태 / 로그인 */}
+            {authUser ? (
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs">
+                <UserRound className="w-3.5 h-3.5 text-blue-400" />
+                <span className="font-bold text-slate-100 max-w-20 truncate">{authUser.name}</span>
+                <span
+                  className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                    authUser.role === 'admin'
+                      ? 'bg-violet-500/15 text-violet-300 border border-violet-500/30'
+                      : 'bg-slate-800 text-slate-400'
+                  }`}
+                >
+                  {authUser.role === 'admin' ? '관리자' : authUser.role === 'editor' ? '에디터' : '회원'}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  title="로그아웃"
+                  className="p-1 rounded text-slate-400 hover:text-rose-300 hover:bg-slate-800 transition-colors"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <Link
+                href="/login"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white transition-all"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">로그인</span>
+              </Link>
+            )}
 
             {/* Quick Panic Button in Header */}
             <button

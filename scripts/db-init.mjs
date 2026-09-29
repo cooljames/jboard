@@ -30,11 +30,12 @@ async function main() {
   `;
   console.log('✅ Created table: quant_strategies');
 
-  // 2. orders
+  // 2. orders (주문 체결 로그: 자동/수동/패닉 모두 유실 없이 기록)
   await sql`
     CREATE TABLE IF NOT EXISTS orders (
       id SERIAL PRIMARY KEY,
-      strategy_id TEXT REFERENCES quant_strategies(id),
+      strategy_id TEXT,
+      source TEXT NOT NULL DEFAULT 'MANUAL',
       ticker TEXT NOT NULL,
       ticker_name TEXT NOT NULL,
       side TEXT NOT NULL,
@@ -50,6 +51,91 @@ async function main() {
     );
   `;
   console.log('✅ Created table: orders');
+
+  // Migration for existing databases (레거시 orders 테이블 승격)
+  await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'MANUAL'`;
+  // 레거시 FK(strategy_id -> quant_strategies)가 있으면 제거: MANUAL/PANIC 기록 유실 방지
+  await sql`
+    DO $$
+    DECLARE c RECORD;
+    BEGIN
+      FOR c IN (
+        SELECT conname FROM pg_constraint
+        WHERE conrelid = 'orders'::regclass AND contype = 'f'
+      ) LOOP
+        EXECUTE format('ALTER TABLE orders DROP CONSTRAINT IF EXISTS %I', c.conname);
+      END LOOP;
+    END $$;
+  `;
+  // 기존 행의 source 백필: strategy_id 기준 추론 (이미 수동으로 찍힌 MANUAL 행은 유지)
+  await sql`
+    UPDATE orders SET source = 'PANIC'
+    WHERE UPPER(COALESCE(strategy_id, '')) LIKE '%PANIC%';
+  `;
+  await sql`
+    UPDATE orders SET source = 'AUTO'
+    WHERE source = 'MANUAL'
+      AND strategy_id IN ('volatility_breakout','institutional_buying','mean_reversion','dual_momentum','ai_hybrid');
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS idx_orders_source_created ON orders (source, created_at DESC)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_orders_ticker_created ON orders (ticker, created_at DESC)`;
+
+  // 6. jquant_users (회원 가입 / 로그인)
+  // 테이블명을 jquant_users로 분리: 공용 DB의 타 시스템(users) 테이블과 충돌 방지
+  await sql`
+    CREATE TABLE IF NOT EXISTS jquant_users (
+      id SERIAL PRIMARY KEY,
+      email TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      password_hash TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'member',
+      status TEXT NOT NULL DEFAULT 'active',
+      last_login_at TIMESTAMP,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+  `;
+  console.log('✅ Created table: jquant_users');
+  await sql`CREATE INDEX IF NOT EXISTS idx_jquant_users_email ON jquant_users (email)`;
+
+  // 기본 계정 시드 (등급별: admin / editor / member)
+  // - 비밀번호는 환경변수(SEED_ADMIN_PASSWORD 등)로 변경 가능, 미설정 시 아래 기본값
+  // - 이미 존재하는 이메일은 ON CONFLICT DO NOTHING으로 기존 비밀번호 유지 (덮어쓰지 않음)
+  const { scryptSync: scryptSeed, randomBytes: randomSeed } = await import('node:crypto');
+  const seedHash = (plain) => {
+    const salt = randomSeed(16).toString('hex');
+    return `scrypt$16384$8$1$${salt}$${scryptSeed(plain, salt, 64).toString('hex')}`;
+  };
+
+  // 선택 시드: ADMIN_EMAIL/ADMIN_PASSWORD가 설정된 경우 커스텀 관리자 추가 생성
+  if (process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD) {
+    await sql`
+      INSERT INTO jquant_users (email, name, password_hash, role, status, created_at, updated_at)
+      VALUES (${process.env.ADMIN_EMAIL.toLowerCase()}, ${process.env.ADMIN_NAME || '관리자'}, ${seedHash(process.env.ADMIN_PASSWORD)}, 'admin', 'active', NOW(), NOW())
+      ON CONFLICT (email) DO NOTHING;
+    `;
+    console.log('✅ Seeded admin user (ADMIN_EMAIL).');
+  }
+
+  // 기본 계정 시드 (등급별: admin / editor / member)
+  const defaultAccounts = [
+    { email: 'admin@jboard.co.kr', name: '관리자', role: 'admin', password: process.env.SEED_ADMIN_PASSWORD || 'Admin1234!' },
+    { email: 'editor@jboard.co.kr', name: '알고퀀터', role: 'editor', password: process.env.SEED_EDITOR_PASSWORD || 'Editor1234!' },
+    { email: 'user@jboard.co.kr', name: '일반회원', role: 'member', password: process.env.SEED_USER_PASSWORD || 'User1234!' },
+  ];
+  for (const a of defaultAccounts) {
+    const created = await sql`
+      INSERT INTO jquant_users (email, name, password_hash, role, status, created_at, updated_at)
+      VALUES (${a.email}, ${a.name}, ${seedHash(a.password)}, ${a.role}, 'active', NOW(), NOW())
+      ON CONFLICT (email) DO NOTHING
+      RETURNING id;
+    `;
+    if (created.length > 0) {
+      console.log(`✅ Seeded ${a.role} account: ${a.email} / ${a.password}`);
+    } else {
+      console.log(`ℹ️ Account already exists, kept existing password: ${a.email}`);
+    }
+  }
 
   // 3. positions
   await sql`
@@ -96,7 +182,7 @@ async function main() {
   `;
   console.log('✅ Created table: account_snapshots');
 
-  // Seed default 5 strategies from dev.md if not exist
+  // Seed default 6 strategies from dev.md if not exist
   const initialStrategies = [
     {
       id: 'volatility_breakout',
@@ -167,6 +253,58 @@ async function main() {
         risk_tolerance: 'MODERATE',
       },
     },
+    {
+      id: 'daytrading_rotation',
+      name: '당일 전액 회전 데이트레이딩 (Day Trading Rotation)',
+      description: '가용현금 전액을 당일 종목 회전에 투입하고 장마감 전 전량 청산 (오버나잇 없음)',
+      enabled: false,
+      allocation_weight: '1.00',
+      target_market: 'ALL',
+      parameters: {
+        capital_usage_pct: 100.0,
+        breakout_pct: 0.3,
+        volume_multiplier: 1.5,
+        rsi_max: 70.0,
+        stop_loss_pct: 1.5,
+        take_profit_pct: 3.0,
+        trailing_stop_pct: 1.0,
+        force_exit_time: '15:20',
+        entry_cutoff_minutes: 10,
+        max_trades_per_day: 10,
+        min_order_amount: 100000.0,
+      },
+    },
+    {
+      id: 'bb_multiregime',
+      name: 'BB 멀티레짐 (평균회귀·추세눌림·변동성돌파)',
+      description: '볼린저밴드+ADX 레짐 전환 매매. 분봉 마감봉 신호, 거래당 0.25% 리스크, 종목 10% 캡',
+      enabled: false,
+      allocation_weight: '0.20',
+      target_market: 'ALL',
+      parameters: {
+        bb_period: 20,
+        bb_mult: 2.0,
+        risk_fraction: 0.0025,
+        max_weight: 0.10,
+        daily_halt_pct: 1.5,
+        mr_adx_max: 22.0,
+        trend_adx_min: 25.0,
+        mr_vol_mult_max: 3.0,
+        mr_time_stop_bars: 10,
+        mr_stop_atr: 1.5,
+        trend_stop_atr: 2.0,
+        trend_trail_atr: 2.5,
+        bo_bbb_pct_max: 0.20,
+        bo_bbb_growth: 0.20,
+        bo_vol_mult: 1.5,
+        bo_min_width_atr: 0.3,
+        bo_stop_atr: 2.0,
+        bo_tp1_atr: 2.0,
+        bo_trail_atr: 2.5,
+        range_spread_bps_max: 300.0,
+        min_bars: 220,
+      },
+    },
   ];
 
   for (const s of initialStrategies) {
@@ -178,7 +316,7 @@ async function main() {
         description = EXCLUDED.description;
     `;
   }
-  console.log('✅ Seeded 5 Quant Strategies into quant_strategies table.');
+  console.log('✅ Seeded 7 Quant Strategies into quant_strategies table.');
 
   console.log('🎉 Neon PostgreSQL Database migration & seeding completed successfully!');
 }

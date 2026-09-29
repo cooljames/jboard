@@ -1,8 +1,13 @@
-from typing import Dict, Any, Optional
+from datetime import datetime, timezone, timedelta
+from typing import Dict, Any, List, Optional
 from python_engine.kis.client import kis_client
 from python_engine.kis.models import KisOrderRequest
 from python_engine.core.logger import logger
+from python_engine.core.db_sync import db_sync
+from python_engine.core.order_cooldown import order_cooldown
 from python_engine.config import settings
+
+KST = timezone(timedelta(hours=9))
 
 class RiskManager:
     """
@@ -88,15 +93,69 @@ class RiskManager:
         return None
 
     async def _execute_exit(self, ticker: str, quantity: int, reason: str) -> str:
-        req = KisOrderRequest(
-            ticker=ticker,
-            side="SELL",
-            order_type="01",  # 시장가 청산
-            price=0,
-            quantity=quantity,
-        )
-        res = await kis_client.send_order(req)
+        # 청산은 쿨다운으로 차단하지 않음 (긴급 탈출 우선). 단 호출한도 오류면 신규매수 대기 등록.
+        try:
+            req = KisOrderRequest(
+                ticker=ticker,
+                side="SELL",
+                order_type="01",  # 시장가 청산
+                price=0,
+                quantity=quantity,
+            )
+            res = await kis_client.send_order(req)
+        except Exception as e:
+            order_cooldown.register_failure(ticker, "SELL", e)
+            raise
         self.high_water_marks.pop(ticker, None)
         return res.order_no
+
+    @staticmethod
+    def is_past_exit_time(exit_time: str = "15:20") -> bool:
+        """장마감 강제청산 시각(KST HH:MM, 평일) 경과 여부"""
+        try:
+            now = datetime.now(KST)
+            if now.weekday() >= 5:  # 토/일: 정규장 없음
+                return False
+            eh, em = (int(x) for x in str(exit_time).split(":"))
+            return (now.hour * 60 + now.minute) >= (eh * 60 + em)
+        except Exception:
+            return False
+
+    async def force_exit_all(
+        self,
+        positions: List[Any],
+        strategy_id: str = "daytrading_rotation",
+        reason: str = "장마감 강제청산",
+    ) -> List[Dict[str, Any]]:
+        """당일 보유분 전량 시장가 청산 (오버나잇 방지) + DB 기록"""
+        results: List[Dict[str, Any]] = []
+        for pos in positions:
+            qty = int(getattr(pos, "quantity", 0) or 0)
+            ticker = str(getattr(pos, "ticker", "") or "").strip()
+            if qty <= 0 or not ticker:
+                continue
+            try:
+                order_no = await self._execute_exit(ticker, qty, reason)
+                logger.critical(f"🔔 [EOD EXIT] {ticker} {qty}주 청산 완료 ({reason}, 주문번호: {order_no})")
+                results.append({"ticker": ticker, "quantity": qty, "order_no": order_no, "success": True})
+                db_sync.record_order({
+                    "strategy_id": strategy_id,
+                    "source": "AUTO",
+                    "ticker": ticker,
+                    "ticker_name": getattr(pos, "ticker_name", ticker),
+                    "side": "SELL",
+                    "order_type": "01",
+                    "price": float(getattr(pos, "current_price", 0.0) or 0.0),
+                    "quantity": qty,
+                    "executed_price": float(getattr(pos, "current_price", 0.0) or 0.0),
+                    "executed_quantity": qty,
+                    "kis_order_no": order_no,
+                    "status": "EXECUTED",
+                    "fail_reason": None,
+                })
+            except Exception as e:
+                logger.error(f"[EOD EXIT] Failed to liquidate {ticker}: {e}")
+                results.append({"ticker": ticker, "quantity": qty, "success": False, "error": str(e)})
+        return results
 
 risk_manager = RiskManager()

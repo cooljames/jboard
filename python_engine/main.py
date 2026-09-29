@@ -17,11 +17,16 @@ import python_engine.strategy.catalog  # Auto-registers 5 strategies
 from python_engine.strategy.ensemble import strategy_ensemble
 from python_engine.data.collector import market_data_collector
 from python_engine.risk.risk_manager import risk_manager
+from python_engine.core.order_cooldown import order_cooldown
+from python_engine.kis.auth import TokenRateLimited
 from python_engine.risk.panic_handler import panic_liquidator
 from python_engine.ai.gemini_analyzer import analyze_stock_with_gemini
 
 # Background runner task reference
 background_trading_task = None
+
+# 자동매매 실행 게이트: 컨트롤타워 시작 버튼으로만 켜짐 (기본 OFF = 안전)
+auto_trading_enabled: bool = False
 
 async def market_evaluation_loop():
     """Background task evaluating market data every 10 seconds for active strategies"""
@@ -32,37 +37,90 @@ async def market_evaluation_loop():
         ("005380", "현대차"),
         ("068270", "셀트리온"),
     ]
-    logger.info("[Trading Worker] Background evaluation loop started.")
+    logger.info("[Trading Worker] Background evaluation loop started (waiting for START signal from Control Tower).")
 
     while True:
         try:
-            active_strats = StrategyRegistry.get_active_strategies()
-            if active_strats and not risk_manager.circuit_breaker_tripped:
-                # Check account balance to monitor daily drawdowns and stop-losses
-                balance = await kis_client.get_balance()
-                risk_manager.set_start_asset(balance.total_asset)
-                risk_manager.check_circuit_breaker(balance.total_asset)
-
-                # Evaluate risk on open positions
-                for pos in balance.positions:
-                    await risk_manager.evaluate_position_risk(
-                        ticker=pos.ticker,
-                        current_price=pos.current_price,
-                        avg_buy_price=pos.avg_buy_price,
-                        quantity=pos.quantity,
-                    )
-
-                # Scan watchlist for active strategies
-                for ticker, name in watchlist:
-                    market_data = await market_data_collector.get_market_data_for_ticker(ticker, name)
-                    signals = await strategy_ensemble.evaluate_market_data(ticker, market_data)
-                    for sig in signals:
-                        if sig.action == "BUY" and risk_manager.can_open_new_position(balance.total_asset):
-                            await strategy_ensemble.execute_signal(sig, total_capital=balance.cashBalance if hasattr(balance, 'cashBalance') else balance.cash_balance)
+            if not auto_trading_enabled:
+                # 대기중: 주문 없이 대기 (다음 사이클까지 슬립)
+                pass
+            else:
+                await _run_single_evaluation_cycle(watchlist)
+        except TokenRateLimited as e:
+            logger.warning(f"[Trading Loop] Token rate-limited, waiting for next cycle: {e}")
         except Exception as e:
-            logger.error(f"[Trading Loop Error] {e}")
+            logger.error(f"[Trading Loop Error] {type(e).__name__}: {e}")
 
         await asyncio.sleep(15)
+
+async def _run_single_evaluation_cycle(watchlist):
+    """1회 매매 평가 사이클 (게이트 ON일 때만 호출)"""
+    active_strats = StrategyRegistry.get_active_strategies()
+    if not active_strats or risk_manager.circuit_breaker_tripped:
+        return
+
+    # Check account balance to monitor daily drawdowns and stop-losses
+    balance = await kis_client.get_balance()
+    risk_manager.set_start_asset(balance.total_asset)
+    risk_manager.check_circuit_breaker(balance.total_asset)
+
+    # Evaluate risk on open positions
+    # 데이트레이딩 활성 시: 타이트한 당일 손절/익절/트레일링 파라미터로 청산 감시
+    day_strat = active_strats.get("daytrading_rotation")
+    if day_strat is not None:
+        dt_params = day_strat.params or {}
+        sl_pct = float(dt_params.get("stop_loss_pct", 1.5))
+        tp_pct = float(dt_params.get("take_profit_pct", 3.0))
+        ts_pct = float(dt_params.get("trailing_stop_pct", 1.0))
+    else:
+        sl_pct, tp_pct, ts_pct = 2.5, 6.0, 2.5
+    for pos in balance.positions:
+        await risk_manager.evaluate_position_risk(
+            ticker=pos.ticker,
+            current_price=pos.current_price,
+            avg_buy_price=pos.avg_buy_price,
+            quantity=pos.quantity,
+            stop_loss_pct=sl_pct,
+            take_profit_pct=tp_pct,
+            trailing_stop_pct=ts_pct,
+        )
+
+    # 장마감 강제 전량 청산 (데이트레이딩 활성 시, 오버나잇 보유 방지)
+    # 청산 후 스캔은 그대로 진행하되, 전략 자체가 청산임박 신규진입을 차단함
+    if day_strat is not None:
+        exit_time = str((day_strat.params or {}).get("force_exit_time", "15:20"))
+        if risk_manager.is_past_exit_time(exit_time):
+            await risk_manager.force_exit_all(
+                positions=balance.positions,
+                strategy_id="daytrading_rotation",
+                reason=f"장마감 강제청산({exit_time} KST)",
+            )
+
+    # Scan watchlist for active strategies
+    held_qty = {p.ticker: int(p.quantity or 0) for p in balance.positions}
+    cash_capital = balance.cashBalance if hasattr(balance, 'cashBalance') else balance.cash_balance
+    # 일손실률 주입 (bb_multiregime 일손실 중단선 등 전략 레벨 리스크 게이트용)
+    try:
+        base_asset = risk_manager.daily_start_asset or balance.total_asset
+        daily_loss_pct = ((balance.total_asset - base_asset) / base_asset * 100.0) if base_asset else 0.0
+    except Exception:
+        daily_loss_pct = 0.0
+    for ticker, name in watchlist:
+        market_data = await market_data_collector.get_market_data_for_ticker(ticker, name)
+        market_data["daily_loss_pct"] = daily_loss_pct
+        market_data["cash_balance"] = cash_capital
+        signals = await strategy_ensemble.evaluate_market_data(ticker, market_data)
+        for sig in signals:
+            if sig.action == "BUY" and risk_manager.can_open_new_position(balance.total_asset):
+                await strategy_ensemble.execute_signal(sig, total_capital=cash_capital)
+            elif sig.action == "SELL":
+                hq = held_qty.get(sig.ticker, 0)
+                if hq <= 0:
+                    continue
+                q = int(sig.quantity or 0) or hq
+                await strategy_ensemble.execute_signal(
+                    sig, total_capital=cash_capital, quantity_override=min(q, hq)
+                )
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -185,6 +243,7 @@ async def submit_manual_order(order_req: KisOrderRequest):
     # Record to DB
     db_sync.record_order({
         "strategy_id": order_req.strategy_id or "MANUAL",
+        "source": "MANUAL",
         "ticker": order_req.ticker,
         "ticker_name": f"종목-{order_req.ticker}",
         "side": order_req.side,
@@ -240,6 +299,60 @@ async def trigger_cron_cycle():
     db_strats = db_sync.get_all_strategies()
     StrategyRegistry.initialize_active_strategies(db_strats)
     return {"success": True, "message": "Cron evaluation cycle triggered."}
+
+def _trading_status_payload() -> dict:
+    return {
+        "enabled": auto_trading_enabled,
+        "active_strategies": list(StrategyRegistry.get_active_strategies().keys()),
+        "circuit_breaker_tripped": risk_manager.circuit_breaker_tripped,
+        "is_paper_trading": settings.kis_is_paper_trading,
+        "order_cooldown": order_cooldown.status(),
+    }
+
+@app.get("/api/trading/status")
+async def trading_status():
+    """컨트롤타워 시작/중지 버튼용 상태 조회"""
+    return {"success": True, **_trading_status_payload()}
+
+@app.post("/api/trading/start")
+async def trading_start():
+    """자동매매 시작 (컨트롤타워 버튼) — 이후 평가 사이클마다 실제 주문 집행"""
+    global auto_trading_enabled
+    db_strats = db_sync.get_all_strategies()
+    StrategyRegistry.initialize_active_strategies(db_strats)
+    auto_trading_enabled = True
+    logger.critical("▶️ [AUTO TRADING] Started by Control Tower. Live order execution enabled.")
+    return {"success": True, "message": "자동매매를 시작합니다.", **_trading_status_payload()}
+
+@app.post("/api/trading/stop")
+async def trading_stop():
+    """자동매매 중지 (컨트롤타워 버튼) — 신규 진입 중단, 기존 보유분은 유지"""
+    global auto_trading_enabled
+    auto_trading_enabled = False
+    logger.critical("⏸️ [AUTO TRADING] Stopped by Control Tower. Standing by (no new orders).")
+    return {"success": True, "message": "자동매매를 중지했습니다 (대기중).", **_trading_status_payload()}
+
+async def _delayed_worker_exit():
+    """응답 전송 후 워커 프로세스 완전 종료"""
+    await asyncio.sleep(1.0)
+    global auto_trading_enabled, background_trading_task
+    auto_trading_enabled = False
+    if background_trading_task:
+        background_trading_task.cancel()
+    try:
+        await kis_ws.stop()
+    except Exception:
+        pass
+    logger.critical("🛑 [WORKER] Shutdown requested from Control Tower. Process exiting.")
+    await asyncio.sleep(0.5)
+    import os
+    os._exit(0)
+
+@app.post("/api/worker/shutdown")
+async def worker_shutdown():
+    """워커 프로세스 완전 종료 (컨트롤타워 종료 버튼) — 재시작은 터미널에서 직접"""
+    asyncio.create_task(_delayed_worker_exit())
+    return {"success": True, "message": "워커 프로세스를 종료합니다."}
 
 if __name__ == "__main__":
     import uvicorn

@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { AccountSummary } from '@/components/dashboard/account-summary';
 import { PositionTable, PositionItem } from '@/components/dashboard/position-table';
 import { ExecutionLog, OrderItem } from '@/components/dashboard/execution-log';
+import { AutoTradingControl, AutoTradingStatus } from '@/components/dashboard/auto-trading-control';
+import { fetchJson } from '@/lib/fetch-json';
 import { Sliders, RefreshCw, Zap, TrendingUp, Search, ArrowRight } from 'lucide-react';
 import { formatKRW } from '@/lib/utils';
 
@@ -14,6 +16,7 @@ export default function DashboardPage() {
     cashBalance: 0,
     stockValuation: 0,
     dailyPnl: 0,
+    unsettledAmount: 0,
     positions: [] as PositionItem[],
   });
   const [strategies, setStrategies] = useState<any[]>([]);
@@ -21,34 +24,56 @@ export default function DashboardPage() {
   const [geminiModel, setGeminiModel] = useState('Gemini 3.8 Flash');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [autoTrade, setAutoTrade] = useState<AutoTradingStatus>({
+    enabled: false,
+    workerOnline: false,
+    activeStrategies: [],
+    circuitBreakerTripped: false,
+    isPaperTrading: true,
+  });
+  const [autoBusy, setAutoBusy] = useState(false);
+  const [autoMsg, setAutoMsg] = useState<string | null>(null);
 
   const fetchData = async () => {
     try {
       // 1. Fetch balance & positions
-      const mRes = await fetch('/api/market');
-      if (mRes.ok) {
-        const mData = await mRes.json();
+      try {
+        const mData = await fetchJson<{ balance?: typeof balance }>('/api/market');
         if (mData.balance) setBalance(mData.balance);
-      }
+      } catch (_) {}
 
       // 2. Fetch strategies
-      const sRes = await fetch('/api/strategies');
-      if (sRes.ok) {
-        const sData = await sRes.json();
+      try {
+        const sData = await fetchJson<{ strategies?: typeof strategies }>('/api/strategies');
         setStrategies(sData.strategies || []);
-      }
+      } catch (_) {}
 
       // 3. Fetch orders
-      const oRes = await fetch('/api/orders');
-      if (oRes.ok) {
-        const oData = await oRes.json();
+      try {
+        const oData = await fetchJson<{ orders?: OrderItem[] }>('/api/orders');
         setOrders(oData.orders || []);
-      }
+      } catch (_) {}
+
+      // 3-1. Fetch auto-trading engine status (동작중/대기중)
+      try {
+        const tData = await fetchJson<any>('/api/auto-trading');
+        setAutoTrade({
+          enabled: !!tData.enabled,
+          workerOnline: tData.workerOnline !== false,
+          activeStrategies: tData.activeStrategies || [],
+          circuitBreakerTripped: !!tData.circuitBreakerTripped,
+          isPaperTrading: tData.isPaperTrading !== false,
+          orderCooldown: tData.orderCooldown || undefined,
+          managed: tData.managed,
+          pid: tData.pid ?? null,
+          uptimeSec: tData.uptimeSec || 0,
+          recentLogs: tData.recentLogs || [],
+        });
+      } catch (_) {}
 
       // 4. Fetch settings for real Gemini model name
-      const setRes = await fetch('/api/settings');
-      if (setRes.ok) {
-        const setData = await setRes.json();
+      try {
+        const setData = await fetchJson<{ gemini?: { model?: string } }>('/api/settings');
         if (setData.gemini?.model) {
           const raw = setData.gemini.model;
           const parts = raw.split('-');
@@ -61,7 +86,7 @@ export default function DashboardPage() {
             setGeminiModel(raw);
           }
         }
-      }
+      } catch (_) {}
     } catch (err) {
       console.error('Failed to fetch dashboard data:', err);
     } finally {
@@ -76,13 +101,14 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleQuickExit = async (ticker: string, quantity: number) => {
+  const handleQuickExit = async (ticker: string, quantity: number, tickerName?: string) => {
     try {
       const res = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ticker,
+          tickerName,
           side: 'SELL',
           orderType: '01', // 시장가
           quantity,
@@ -94,6 +120,74 @@ export default function DashboardPage() {
       }
     } catch (e) {
       console.error('Failed to exit position:', e);
+    }
+  };
+
+  const handleToggleAutoTrading = async () => {
+    if (autoBusy) return;
+    // 워커 꺼짐 → 워커 켜기(부팅). 켜짐 → 매매 시작/중지 게이트.
+    const action = !autoTrade.workerOnline ? 'boot' : autoTrade.enabled ? 'stop' : 'start';
+    if (action === 'start') {
+      const ok = window.confirm(
+        `자동매매를 시작할까요?\n\n활성 전략 ${autoTrade.activeStrategies.length}개가 ${autoTrade.isPaperTrading ? '모의투자' : '실전투자'} 계좌로 실제 주문을 집행합니다.`,
+      );
+      if (!ok) return;
+    }
+    setAutoBusy(true);
+    setAutoMsg(action === 'boot' ? '워커 부팅 중... (최대 30초)' : null);
+    try {
+      const res = await fetch('/api/auto-trading', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const data = await res.json();
+      if (res.ok && data.workerOnline !== false) {
+        setAutoTrade({
+          enabled: !!data.enabled,
+          workerOnline: true,
+          activeStrategies: data.activeStrategies || [],
+          circuitBreakerTripped: !!data.circuitBreakerTripped,
+          isPaperTrading: data.isPaperTrading !== false,
+          orderCooldown: data.orderCooldown || undefined,
+          managed: data.managed,
+          pid: data.pid ?? null,
+          uptimeSec: data.uptimeSec || 0,
+          recentLogs: data.recentLogs || [],
+        });
+        setAutoMsg(data.message || (data.enabled ? '자동매매 동작중' : '자동매매 대기중'));
+      } else {
+        setAutoMsg(data.error || '워커와 통신할 수 없습니다.');
+      }
+    } catch (e) {
+      console.error('Failed to toggle auto trading:', e);
+      setAutoMsg('요청 실패: 워커 연결을 확인하세요.');
+    } finally {
+      setAutoBusy(false);
+    }
+  };
+
+  const handleShutdownAutoTradingWorker = async () => {
+    if (!autoTrade.workerOnline || autoBusy) return;
+    const ok = window.confirm(
+      'Python 워커 프로세스를 완전히 종료할까요?\n\n다시 켤 때는 워커 켜기 버튼을 누르면 됩니다.',
+    );
+    if (!ok) return;
+    setAutoBusy(true);
+    try {
+      const res = await fetch('/api/auto-trading', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'shutdown' }),
+      });
+      const data = await res.json();
+      setAutoMsg(data.message || '워커 종료 요청을 보냈습니다.');
+      await fetchData();
+    } catch (e) {
+      console.error('Failed to shut down worker:', e);
+      setAutoMsg('종료 요청 실패: 워커 연결을 확인하세요.');
+    } finally {
+      setAutoBusy(false);
     }
   };
 
@@ -138,6 +232,15 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* ══ 자동매매 시작/중지 마스터 스위치 ══ */}
+      <AutoTradingControl
+        status={autoTrade}
+        busy={autoBusy}
+        message={autoMsg}
+        onToggle={handleToggleAutoTrading}
+        onShutdown={handleShutdownAutoTradingWorker}
+      />
+
       {/* ══ Gemini AI Engine Real Setting Status Card ══ */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-gradient-to-r from-indigo-950/40 to-slate-900/60 border border-indigo-500/30 shadow-sm">
         <div className="flex items-center gap-3">
@@ -172,6 +275,7 @@ export default function DashboardPage() {
         cashBalance={balance.cashBalance}
         stockValuation={balance.stockValuation}
         dailyPnl={balance.dailyPnl}
+        unsettledAmount={balance.unsettledAmount ?? 0}
         activeStrategiesCount={activeStrategies.length}
       />
 

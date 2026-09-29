@@ -46,4 +46,5 @@ class AccountBalanceInfo(BaseModel):
     cash_balance: float
     stock_valuation: float
     daily_pnl: float
+    unsettled_amount: float = Field(default=0.0, description="D+2 미결제금액 (prvs_rcdl_excc_amt)")
     positions: List[PositionInfo]

@@ -1,7 +1,7 @@
 import asyncio
 import json
 import websockets
-from typing import Callable, Set, Dict, Any
+from typing import Callable, Optional, Set, Dict, Any
 from python_engine.config import settings
 from python_engine.core.logger import logger
 from python_engine.kis.auth import kis_auth
@@ -84,8 +84,13 @@ class KisWebSocketClient:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.warning(f"[KIS WS] Connection lost: {e}. Reconnecting in 5s...")
-                await asyncio.sleep(5)
+                # 토큰 발급제한 중에는 5초 간격 재시도로 한도를 더 때리지 않음
+                if type(e).__name__ == "TokenRateLimited" or "1분당 1회" in str(e):
+                    logger.warning(f"[KIS WS] Token rate-limited. Reconnecting in 65s...")
+                    await asyncio.sleep(65)
+                else:
+                    logger.warning(f"[KIS WS] Connection lost: {e}. Reconnecting in 5s...")
+                    await asyncio.sleep(5)
 
     def _parse_kis_ws_message(self, raw_message: str) -> Optional[Dict[str, Any]]:
         try:

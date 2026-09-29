@@ -3,23 +3,24 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { 
-  BarChart3, 
-  Sliders, 
-  Search, 
-  ArrowLeftRight, 
-  MessageSquare, 
-  Key, 
-  ShieldAlert, 
-  PanelLeftClose, 
-  Clock, 
-  Activity, 
+import {
+  BarChart3,
+  Sliders,
+  Search,
+  ArrowLeftRight,
+  MessageSquare,
+  Key,
+  ShieldAlert,
+  PanelLeftClose,
+  Clock,
+  Activity,
   AlertTriangle,
   Radio,
   HelpCircle,
   Sun,
   Moon,
-  Users
+  Users,
+  ScrollText
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -103,8 +104,8 @@ export function Sidebar({ isMerged, onToggleMerge, onOpenPanicModal, theme, onTo
   const navItems = [
     { label: '컨트롤 타워', href: '/', icon: BarChart3, desc: '종합 대시보드' },
     { label: '동적 퀀트 전략', href: '/strategies', icon: Sliders, desc: '알고리즘 가중치 제어' },
-    { label: 'AI 스마트 종목 발굴', href: '/search', icon: Search, desc: '차트 & Gemini 분석' },
-    { label: '실시간 주문 & 매매', href: '/trading', icon: ArrowLeftRight, desc: 'KIS 호가 및 수동 체결' },
+    { label: '실시간 검색 & 주문', href: '/trading', icon: ArrowLeftRight, desc: '종목 발굴, 차트 & KIS 주문' },
+    { label: '매매 일지', href: '/logs', icon: ScrollText, desc: '자동/수동 체결 로그' },
     { label: '커뮤니티 게시판', href: '/board', icon: MessageSquare, desc: '전략 토론 & 일지' },
     { label: '회원 & 권한 관리', href: '/admin?tab=members', icon: Users, desc: 'jboard 회원 제어' },
     { label: '시스템 환경 설정', href: '/settings', icon: Key, desc: 'KIS & Gemini API' },
@@ -185,7 +186,7 @@ export function Sidebar({ isMerged, onToggleMerge, onOpenPanicModal, theme, onTo
           </div>
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = pathname === item.href;
+            const isActive = pathname === item.href || (item.href === '/trading' && pathname === '/search');
             return (
               <Link
                 key={item.href}

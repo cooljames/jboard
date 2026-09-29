@@ -30,8 +30,11 @@ class KisClient:
         json_body: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
-        Executes an HTTP request to KIS with Token Bucket Rate Limiting (20 TPS)
+        Executes an HTTP request to KIS with Token Bucket Rate Limiting (20 TPS).
+        EGW00121/EGW00123(토큰 무효) 시 토큰을 버리고 1회 재발급 후 재시도.
         """
+        from python_engine.kis.auth import TokenRateLimited, TOKEN_INVALID_CODES
+
         await kis_rate_limiter.acquire()
         token = await kis_auth.get_token()
 
@@ -50,17 +53,38 @@ class KisClient:
 
         url = f"{self.base_url}{path}"
 
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            if method.upper() == "GET":
-                res = await client.get(url, params=params, headers=headers)
-            else:
-                res = await client.post(url, json=json_body, headers=headers)
+        for attempt in range(2):
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                if method.upper() == "GET":
+                    res = await client.get(url, params=params, headers=headers)
+                else:
+                    res = await client.post(url, json=json_body, headers=headers)
 
-            if res.status_code != 200:
-                logger.error(f"[KIS REST] Request to {path} failed: {res.status_code} - {res.text}")
-                raise RuntimeError(f"KIS API Error ({res.status_code}): {res.text}")
+                if res.status_code != 200:
+                    logger.error(f"[KIS REST] Request to {path} failed: {res.status_code} - {res.text}")
+                    raise RuntimeError(f"KIS API Error ({res.status_code}): {res.text}")
 
-            return res.json()
+                data = res.json()
+                if attempt == 0 and data.get("msg_cd") in TOKEN_INVALID_CODES:
+                    logger.warning(
+                        f"[KIS REST] Invalid token ({data.get('msg_cd')}). "
+                        f"Dropping cached token and retrying once."
+                    )
+                    kis_auth.drop_token()
+                    try:
+                        token = await kis_auth.get_token()
+                    except TokenRateLimited as e:
+                        raise RuntimeError(f"KIS token refresh rate-limited, retry later: {e}")
+                    headers["authorization"] = f"Bearer {token}"
+                    if method.upper() == "POST" and json_body:
+                        hashkey = await kis_auth.get_hashkey(json_body)
+                        if hashkey:
+                            headers["hashkey"] = hashkey
+                        else:
+                            headers.pop("hashkey", None)
+                    continue
+                return data
+        raise RuntimeError(f"KIS API Error: invalid token retry failed for {path}")
 
     async def get_current_price(self, ticker: str) -> StockPriceInfo:
         """
@@ -194,43 +218,79 @@ class KisClient:
             )
 
         tr_id = "VTTC8434R" if self.is_paper else "TTTC8434R"
-        params = {
-            "CANO": self.cano,
-            "ACNT_PRDT_CD": self.acnt_prdt_cd,
-            "AFHR_FLPR_YN": "N",
-            "OFL_YN": "",
-            "INQR_DVSN": "02",
-            "UNPR_DVSN": "01",
-            "FUND_STTL_ICLD_YN": "N",
-            "FNCG_AMT_AUTO_RDPT_YN": "N",
-            "PRCS_DVSN": "00",
-            "CTX_AREA_FK100": "",
-            "CTX_AREA_NK100": "",
-        }
 
-        data = await self._make_request("GET", "/uapi/domestic-stock/v1/trading/inquire-balance", tr_id, params=params)
-        output1 = data.get("output1", [])
-        output2 = data.get("output2", [{}])[0] if data.get("output2") else {}
+        def _to_float(v: object) -> float:
+            try:
+                if v is None or v == "":
+                    return 0.0
+                return float(str(v).replace(",", ""))
+            except (ValueError, TypeError):
+                return 0.0
+
+        def _to_qty(p: dict) -> int:
+            # KIS 공식 필드명은 hldg_qty (보유수량). hld_qty는 오타 폴백용.
+            raw = p.get("hldg_qty", p.get("hld_qty", 0))
+            try:
+                if raw is None or raw == "":
+                    return 0
+                return int(float(str(raw).replace(",", "")))
+            except (ValueError, TypeError):
+                return 0
+
+        # KIS는 1회 조회 최대 20종목까지만 반환하므로 CTX_AREA_* 로 전 페이지 순회
+        all_output1: list = []
+        output2: dict = {}
+        ctx_fk = ""
+        ctx_nk = ""
+        for _ in range(10):
+            params = {
+                "CANO": self.cano,
+                "ACNT_PRDT_CD": self.acnt_prdt_cd,
+                "AFHR_FLPR_YN": "N",
+                "OFL_YN": "",
+                "INQR_DVSN": "02",
+                "UNPR_DVSN": "01",
+                "FUND_STTL_ICLD_YN": "N",
+                "FNCG_AMT_AUTO_RDPT_YN": "N",
+                "PRCS_DVSN": "00",
+                "CTX_AREA_FK100": ctx_fk,
+                "CTX_AREA_NK100": ctx_nk,
+            }
+
+            data = await self._make_request("GET", "/uapi/domestic-stock/v1/trading/inquire-balance", tr_id, params=params)
+            page_output1 = data.get("output1", []) or []
+            all_output1.extend(page_output1)
+            if data.get("output2"):
+                output2 = data["output2"][0] or {}
+
+            next_fk = str(data.get("ctx_area_fk100", "") or "").strip()
+            next_nk = str(data.get("ctx_area_nk100", "") or "").strip()
+            if not next_nk:
+                break
+            if next_fk == ctx_fk and next_nk == ctx_nk:
+                break
+            ctx_fk, ctx_nk = next_fk, next_nk
 
         positions = [
             PositionInfo(
-                ticker=p.get("pdno"),
-                ticker_name=p.get("prdt_name"),
-                quantity=int(p.get("hld_qty", 0)),
-                avg_buy_price=float(p.get("pchs_avg_pric", 0.0)),
-                current_price=float(p.get("prpr", 0.0)),
-                unrealized_pnl=float(p.get("evlu_pfls_amt", 0.0)),
-                return_pct=float(p.get("evlu_pfls_rt", 0.0)),
+                ticker=str(p.get("pdno", "") or "").strip(),
+                ticker_name=str(p.get("prdt_name", "") or "").strip(),
+                quantity=_to_qty(p),
+                avg_buy_price=_to_float(p.get("pchs_avg_pric", 0.0)),
+                current_price=_to_float(p.get("prpr", 0.0)),
+                unrealized_pnl=_to_float(p.get("evlu_pfls_amt", 0.0)),
+                return_pct=_to_float(p.get("evlu_pfls_rt", 0.0)),
             )
-            for p in output1
-            if int(p.get("hld_qty", 0)) > 0
+            for p in all_output1
+            if _to_qty(p) > 0 and str(p.get("pdno", "") or "").strip()
         ]
 
         return AccountBalanceInfo(
-            total_asset=float(output2.get("tot_evlu_amt", 0.0)),
-            cash_balance=float(output2.get("dnca_tot_amt", 0.0)),
-            stock_valuation=float(output2.get("scts_evlu_amt", 0.0)),
-            daily_pnl=float(output2.get("evlu_pfls_smtl_amt", 0.0)),
+            total_asset=_to_float(output2.get("tot_evlu_amt", 0.0)),
+            cash_balance=_to_float(output2.get("dnca_tot_amt", 0.0)),
+            stock_valuation=_to_float(output2.get("scts_evlu_amt", 0.0)),
+            daily_pnl=_to_float(output2.get("evlu_pfls_smtl_amt", 0.0)),
+            unsettled_amount=_to_float(output2.get("prvs_rcdl_excc_amt", 0.0)),
             positions=positions,
         )
 

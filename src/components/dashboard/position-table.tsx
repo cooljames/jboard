@@ -16,17 +16,17 @@ export interface PositionItem {
 
 interface PositionTableProps {
   positions: PositionItem[];
-  onQuickExit?: (ticker: string, quantity: number) => Promise<void>;
+  onQuickExit?: (ticker: string, quantity: number, tickerName?: string) => Promise<void>;
 }
 
 export function PositionTable({ positions, onQuickExit }: PositionTableProps) {
   const [sellingTicker, setSellingTicker] = useState<string | null>(null);
 
-  const handleSell = async (ticker: string, quantity: number) => {
+  const handleSell = async (ticker: string, quantity: number, tickerName?: string) => {
     if (!onQuickExit) return;
     setSellingTicker(ticker);
     try {
-      await onQuickExit(ticker, quantity);
+      await onQuickExit(ticker, quantity, tickerName);
     } finally {
       setSellingTicker(null);
     }
@@ -105,7 +105,7 @@ export function PositionTable({ positions, onQuickExit }: PositionTableProps) {
                     </td>
                     <td className="py-3.5 pl-4 text-center">
                       <button
-                        onClick={() => handleSell(pos.ticker, pos.quantity)}
+                        onClick={() => handleSell(pos.ticker, pos.quantity, pos.tickerName)}
                         disabled={sellingTicker === pos.ticker}
                         className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-slate-800 hover:bg-rose-600/30 text-slate-300 hover:text-rose-300 border border-slate-700 hover:border-rose-500/40 text-xs font-medium transition-colors"
                       >

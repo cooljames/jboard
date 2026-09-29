@@ -79,29 +79,75 @@ class DatabaseSync:
         conn = self._get_connection()
         if not conn:
             return None
+        # 출처 정규화: source 우선, 없으면 strategy_id로 추론 (TS order-source.ts와 동일 규칙)
+        source = str(order_data.get("source") or "").strip().upper()
+        if source not in ("AUTO", "MANUAL", "PANIC"):
+            if source in ("SYSTEM", "ALGO", "STRATEGY"):
+                source = "AUTO"
+            elif source == "USER":
+                source = "MANUAL"
+            else:
+                sid = str(order_data.get("strategy_id") or "")
+                if "PANIC" in sid.upper():
+                    source = "PANIC"
+                elif sid in ("volatility_breakout", "institutional_buying", "mean_reversion", "dual_momentum", "ai_hybrid"):
+                    source = "AUTO"
+                elif sid.upper().startswith("MANUAL") or not sid:
+                    source = "MANUAL"
+                else:
+                    source = "AUTO"
         try:
             with conn.cursor() as cur:
-                cur.execute("""
-                    INSERT INTO orders (
-                        strategy_id, ticker, ticker_name, side, order_type, price,
-                        quantity, executed_price, executed_quantity, kis_order_no,
-                        status, fail_reason, created_at
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
-                    RETURNING id
-                """, (
-                    order_data.get("strategy_id"),
-                    order_data.get("ticker"),
-                    order_data.get("ticker_name"),
-                    order_data.get("side"),
-                    order_data.get("order_type", "00"),
-                    order_data.get("price"),
-                    order_data.get("quantity"),
-                    order_data.get("executed_price"),
-                    order_data.get("executed_quantity", 0),
-                    order_data.get("kis_order_no"),
-                    order_data.get("status", "PENDING"),
-                    order_data.get("fail_reason"),
-                ))
+                try:
+                    cur.execute("""
+                        INSERT INTO orders (
+                            strategy_id, source, ticker, ticker_name, side, order_type, price,
+                            quantity, executed_price, executed_quantity, kis_order_no,
+                            status, fail_reason, created_at
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                        RETURNING id
+                    """, (
+                        order_data.get("strategy_id"),
+                        source,
+                        order_data.get("ticker"),
+                        order_data.get("ticker_name"),
+                        order_data.get("side"),
+                        order_data.get("order_type", "00"),
+                        order_data.get("price"),
+                        order_data.get("quantity"),
+                        order_data.get("executed_price"),
+                        order_data.get("executed_quantity", 0),
+                        order_data.get("kis_order_no"),
+                        order_data.get("status", "PENDING"),
+                        order_data.get("fail_reason"),
+                    ))
+                except Exception as e:
+                    # 구 DB(source 컬럼 미적용) 호환
+                    if "source" in str(e).lower() or "column" in str(e).lower():
+                        conn.rollback()
+                        cur.execute("""
+                            INSERT INTO orders (
+                                strategy_id, ticker, ticker_name, side, order_type, price,
+                                quantity, executed_price, executed_quantity, kis_order_no,
+                                status, fail_reason, created_at
+                            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                            RETURNING id
+                        """, (
+                            order_data.get("strategy_id"),
+                            order_data.get("ticker"),
+                            order_data.get("ticker_name"),
+                            order_data.get("side"),
+                            order_data.get("order_type", "00"),
+                            order_data.get("price"),
+                            order_data.get("quantity"),
+                            order_data.get("executed_price"),
+                            order_data.get("executed_quantity", 0),
+                            order_data.get("kis_order_no"),
+                            order_data.get("status", "PENDING"),
+                            order_data.get("fail_reason"),
+                        ))
+                    else:
+                        raise
                 order_id = cur.fetchone()["id"]
                 conn.commit()
                 return order_id

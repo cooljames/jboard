@@ -40,6 +40,7 @@ class PanicLiquidator:
                 # DB logging
                 db_sync.record_order({
                     "strategy_id": "PANIC_BUTTON",
+                    "source": "PANIC",
                     "ticker": pos.ticker,
                     "ticker_name": pos.ticker_name,
                     "side": "SELL",

@@ -12,6 +12,13 @@ class SignalResult(BaseModel):
     weight: float = Field(default=1.0, description="전략 내 수량 비중")
     reason: str = Field(description="신호 발생 사유")
     strategy_id: Optional[str] = Field(default=None, description="신호 발생 전략 식별자")
+    use_full_capital: bool = Field(default=False, description="True면 전략 비중 무시하고 총자본 기준으로 수량 산정 (전액 회전용)")
+    capital_pct: float = Field(default=1.0, description="use_full_capital=True일 때 투입할 총자본 비율 (0.0~1.0)")
+    min_order_amount: float = Field(default=100000.0, description="최소 주문금액 (미만 시 주문 스킵)")
+    quantity: Optional[int] = Field(default=None, description="지정 시 ensemble이 사이징 대신 이 수량 그대로 사용 (추적청산 등)")
+    stop_distance: float = Field(default=0.0, description="주당 위험거리(원). >0이면 risk_fraction 기반 사이징")
+    risk_fraction: float = Field(default=0.0025, description="거래당 위험 비율 (기본 0.25%)")
+    max_weight: float = Field(default=0.10, description="종목별 최대 비중 (기본 10%)")
 
 class BaseStrategy(ABC):
     def __init__(self, strategy_id: str, name: str, params: Dict[str, Any]):

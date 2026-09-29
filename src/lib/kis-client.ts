@@ -34,6 +34,8 @@ export interface KisAccountBalance {
   cashBalance: number;
   stockValuation: number;
   dailyPnl: number;
+  /** D+2 미결제금액 (prvs_rcdl_excc_amt, 가수도정산). 당일 회전매매 시 큰 음수 가능 */
+  unsettledAmount: number;
   positions: KisPosition[];
 }
 
@@ -430,6 +432,7 @@ class KisClient {
         cashBalance: 0,
         stockValuation: 0,
         dailyPnl: 0,
+        unsettledAmount: 0,
         positions: [],
       };
     }
@@ -441,54 +444,84 @@ class KisClient {
     const isPaper = this.config.isPaperTrading;
     const trId = isPaper ? 'VTTC8434R' : 'TTTC8434R';
 
-    const url = new URL(`${this.config.restBaseUrl}/uapi/domestic-stock/v1/trading/inquire-balance`);
-    url.searchParams.append('CANO', this.config.accountNo);
-    url.searchParams.append('ACNT_PRDT_CD', this.config.accountPrdtCd);
-    url.searchParams.append('AFHR_FLPR_YN', 'N');
-    url.searchParams.append('OFL_YN', '');
-    url.searchParams.append('INQR_DVSN', '02');
-    url.searchParams.append('UNPR_DVSN', '01');
-    url.searchParams.append('FUND_STTL_ICLD_YN', 'N');
-    url.searchParams.append('FNCG_AMT_AUTO_RDPT_YN', 'N');
-    url.searchParams.append('PRCS_DVSN', '00');
-    url.searchParams.append('CTX_AREA_FK100', '');
-    url.searchParams.append('CTX_AREA_NK100', '');
-
     try {
-      const res = await fetch(url.toString(), {
-        headers: {
-          'Content-Type': 'application/json',
-          authorization: `Bearer ${token}`,
-          appkey: this.config.appKey,
-          appsecret: this.config.appSecret,
-          tr_id: trId,
-        },
-      });
+      // KIS는 1회 조회 최대 20종목까지만 반환하므로 CTX_AREA_* 로 전 페이지 순회
+      let ctxFk = '';
+      let ctxNk = '';
+      const allOutput1: any[] = [];
+      let output2: any = {};
+      for (let page = 0; page < 10; page++) {
+        const url = new URL(`${this.config.restBaseUrl}/uapi/domestic-stock/v1/trading/inquire-balance`);
+        url.searchParams.append('CANO', this.config.accountNo);
+        url.searchParams.append('ACNT_PRDT_CD', this.config.accountPrdtCd);
+        url.searchParams.append('AFHR_FLPR_YN', 'N');
+        url.searchParams.append('OFL_YN', '');
+        url.searchParams.append('INQR_DVSN', '02');
+        url.searchParams.append('UNPR_DVSN', '01');
+        url.searchParams.append('FUND_STTL_ICLD_YN', 'N');
+        url.searchParams.append('FNCG_AMT_AUTO_RDPT_YN', 'N');
+        url.searchParams.append('PRCS_DVSN', '00');
+        url.searchParams.append('CTX_AREA_FK100', ctxFk);
+        url.searchParams.append('CTX_AREA_NK100', ctxNk);
 
-      const data = await res.json();
-      if (!res.ok || data.rt_cd !== '0') {
-        console.warn(`[KIS Balance Check] API returned non-zero response: [${data.msg_cd}] ${data.msg1 || res.statusText}. Using fallback.`);
-        return this.getMockBalance();
+        const res = await fetch(url.toString(), {
+          headers: {
+            'Content-Type': 'application/json',
+            authorization: `Bearer ${token}`,
+            appkey: this.config.appKey,
+            appsecret: this.config.appSecret,
+            tr_id: trId,
+          },
+        });
+
+        const data = await res.json();
+        if (!res.ok || data.rt_cd !== '0') {
+          console.warn(`[KIS Balance Check] API returned non-zero response: [${data.msg_cd}] ${data.msg1 || res.statusText}. Using fallback.`);
+          return this.getMockBalance();
+        }
+
+        const pageOutput1 = Array.isArray(data.output1) ? data.output1 : [];
+        allOutput1.push(...pageOutput1);
+        if (data.output2 && data.output2[0]) output2 = data.output2[0];
+
+        // 연속조회 키가 비어 있으면 마지막 페이지
+        const nextFk = (data.ctx_area_fk100 || '').trim();
+        const nextNk = (data.ctx_area_nk100 || '').trim();
+        const trCont = res.headers.get('tr_cont');
+        if (!nextNk || trCont === 'D' || trCont === 'E') break;
+        // FK/NK가 변하지 않으면 무한루프 방지
+        if (nextFk === ctxFk && nextNk === ctxNk) break;
+        ctxFk = nextFk;
+        ctxNk = nextNk;
+        // 다음 페이지가 없으면 종료 (첫 페이지에서 키가 비어있는 정상 케이스)
+        if (!ctxNk) break;
       }
 
-      const output1 = data.output1 || [];
-      const output2 = (data.output2 && data.output2[0]) || {};
+      const toNum = (v: any): number => {
+        if (v === null || v === undefined || v === '') return 0;
+        const n = parseFloat(String(v).replace(/,/g, ''));
+        return Number.isFinite(n) ? n : 0;
+      };
 
-      const positions: KisPosition[] = output1.map((p: any) => ({
-        ticker: p.pdno,
-        tickerName: p.prdt_name,
-        quantity: parseInt(p.hld_qty || '0', 10),
-        avgBuyPrice: parseFloat(p.pchs_avg_pric || '0'),
-        currentPrice: parseFloat(p.prpr || '0'),
-        unrealizedPnl: parseFloat(p.evlu_pfls_amt || '0'),
-        returnPct: parseFloat(p.evlu_pfls_rt || '0'),
-      }));
+      const positions: KisPosition[] = allOutput1
+        .map((p: any) => ({
+          ticker: String(p.pdno || '').trim(),
+          tickerName: String(p.prdt_name || '').trim(),
+          // KIS 공식 필드명은 hldg_qty (보유수량). hld_qty는 오타 폴백용.
+          quantity: Math.trunc(toNum(p.hldg_qty ?? p.hld_qty ?? 0)),
+          avgBuyPrice: toNum(p.pchs_avg_pric),
+          currentPrice: toNum(p.prpr),
+          unrealizedPnl: toNum(p.evlu_pfls_amt),
+          returnPct: toNum(p.evlu_pfls_rt),
+        }))
+        .filter((p) => p.ticker && p.quantity > 0);
 
       return {
-        totalAsset: parseFloat(output2.tot_evlu_amt || '0'),
-        cashBalance: parseFloat(output2.dnca_tot_amt || '0'),
-        stockValuation: parseFloat(output2.scts_evlu_amt || '0'),
-        dailyPnl: parseFloat(output2.evlu_pfls_smtl_amt || '0'),
+        totalAsset: toNum(output2.tot_evlu_amt),
+        cashBalance: toNum(output2.dnca_tot_amt),
+        stockValuation: toNum(output2.scts_evlu_amt),
+        dailyPnl: toNum(output2.evlu_pfls_smtl_amt),
+        unsettledAmount: toNum(output2.prvs_rcdl_excc_amt),
         positions,
       };
     } catch (e: any) {
@@ -503,6 +536,7 @@ class KisClient {
       cashBalance: 0,
       stockValuation: 0,
       dailyPnl: 0,
+      unsettledAmount: 0,
       positions: [],
     };
   }
@@ -513,7 +547,7 @@ class KisClient {
   async panicLiquidateAll(): Promise<{
     success: boolean;
     liquidatedCount: number;
-    results: Array<{ ticker: string; orderNo?: string; success: boolean; error?: string }>;
+    results: Array<{ ticker: string; tickerName?: string; quantity: number; orderNo?: string; success: boolean; error?: string }>;
   }> {
     const balance = await this.getAccountBalance();
     const positionsToSell = balance.positions.filter((p) => p.quantity > 0);
@@ -528,9 +562,9 @@ class KisClient {
             price: 0,
             quantity: pos.quantity,
           });
-          return { ticker: pos.ticker, orderNo: res.orderNo, success: true };
+          return { ticker: pos.ticker, tickerName: pos.tickerName, quantity: pos.quantity, orderNo: res.orderNo, success: true };
         } catch (e: any) {
-          return { ticker: pos.ticker, success: false, error: e.message };
+          return { ticker: pos.ticker, tickerName: pos.tickerName, quantity: pos.quantity, success: false, error: e.message };
         }
       })
     );

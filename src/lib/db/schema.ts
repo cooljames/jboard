@@ -13,9 +13,13 @@ export const quantStrategies = pgTable('quant_strategies', {
 });
 
 // 2. 주문 내역 테이블 (Order History & Execution Tracking)
+// - strategy_id는 FK를 걸지 않는다: MANUAL / MANUAL_EXIT / PANIC_BUTTON 같은
+//   비전략 주문도 유실 없이 계속 기록해야 하기 때문.
+// - source: 'AUTO' | 'MANUAL' | 'PANIC' (레거시 행은 strategy_id로 추론)
 export const orders = pgTable('orders', {
   id: serial('id').primaryKey(),
-  strategyId: text('strategy_id').references(() => quantStrategies.id),
+  strategyId: text('strategy_id'),
+  source: text('source').default('MANUAL').notNull(),
   ticker: text('ticker').notNull(),
   tickerName: text('ticker_name').notNull(),
   side: text('side').notNull(), // "BUY" | "SELL"
@@ -93,4 +97,24 @@ export type AccountSnapshot = typeof accountSnapshots.$inferSelect;
 export type NewAccountSnapshot = typeof accountSnapshots.$inferInsert;
 export type BoardPost = typeof boardPosts.$inferSelect;
 export type NewBoardPost = typeof boardPosts.$inferInsert;
+
+// 7. 회원 테이블 (Membership / Auth)
+// - DB 테이블명 `jquant_users`: 공용 DB의 타 시스템 users 테이블과 충돌 방지
+// - passwordHash: scrypt 해시 (평문 비밀번호 절대 저장 금지)
+// - role: 'admin' | 'editor' | 'member'
+// - status: 'active' | 'inactive' | 'banned'
+export const users = pgTable('jquant_users', {
+  id: serial('id').primaryKey(),
+  email: text('email').notNull().unique(),
+  name: text('name').notNull(),
+  passwordHash: text('password_hash').notNull(),
+  role: text('role').default('member').notNull(),
+  status: text('status').default('active').notNull(),
+  lastLoginAt: timestamp('last_login_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+export type User = typeof users.$inferSelect;
+export type NewUser = typeof users.$inferInsert;
 
