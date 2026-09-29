@@ -73,7 +73,7 @@ export function LandingHome({ authUser, onGoToDashboard }: LandingHomeProps) {
       name: 'Google Gemini AI 하이브리드',
       badge: 'AI 지능형',
       badgeColor: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
-      desc: '기술적 지표 분석 결과와 Google Gemini 2.5 Flash 멀티모달 AI의 뉴스/공시/심리 분석 브리핑을 결합해 최종 시그널을 필터링합니다.',
+      desc: '기술적 지표 분석 결과와 Google Gemini 멀티모달 AI의 뉴스/공시/심리 분석 브리핑을 결합해 최종 시그널을 필터링합니다.',
       feature: '정량 지표 + 정성 뉴스 결합',
       target: '실시간 주요 이슈 종목',
     },
@@ -164,7 +164,7 @@ export function LandingHome({ authUser, onGoToDashboard }: LandingHomeProps) {
 
           {/* Subtitle */}
           <p className="text-base sm:text-lg text-slate-300 max-w-2xl leading-relaxed">
-            한국투자증권(KIS) Open API 실시간 연동, Google Gemini 2.5 AI 지능형 분석, 7대 동적 앙상블 전략 및 실시간 시장 검색까지 — 한 화면에서 경험하는 전문가 수준의 자동매매 시스템입니다.
+            한국투자증권(KIS) Open API 실시간 연동, Google Gemini AI 지능형 분석, 7대 동적 앙상블 전략 및 실시간 시장 검색까지 — 한 화면에서 경험하는 전문가 수준의 자동매매 시스템입니다.
           </p>
 
           {/* Action CTA Buttons */}
@@ -223,19 +223,19 @@ export function LandingHome({ authUser, onGoToDashboard }: LandingHomeProps) {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 w-full pt-8 border-t border-slate-800/80 text-left">
             <div className="p-3 bg-slate-950/60 rounded-2xl border border-slate-800/60">
               <span className="text-[11px] text-slate-400 font-medium block">알고리즘 전략</span>
-              <span className="text-xl font-bold font-mono text-white">7대 앙상블</span>
+              <span className="text-xl font-bold text-white tracking-tight">7대 앙상블</span>
             </div>
             <div className="p-3 bg-slate-950/60 rounded-2xl border border-slate-800/60">
               <span className="text-[11px] text-slate-400 font-medium block">KIS 처리량</span>
-              <span className="text-xl font-bold font-mono text-emerald-400">20 TPS 보호</span>
+              <span className="text-xl font-bold text-emerald-400 tracking-tight">20 TPS 보호</span>
             </div>
             <div className="p-3 bg-slate-950/60 rounded-2xl border border-slate-800/60">
               <span className="text-[11px] text-slate-400 font-medium block">지원 시장</span>
-              <span className="text-xl font-bold font-mono text-blue-400">코스피·코스닥·ETF</span>
+              <span className="text-xl font-bold text-blue-400 tracking-tight">코스피·코스닥·ETF</span>
             </div>
             <div className="p-3 bg-slate-950/60 rounded-2xl border border-slate-800/60">
               <span className="text-[11px] text-slate-400 font-medium block">인공지능 모델</span>
-              <span className="text-xl font-bold font-mono text-purple-400">Gemini 2.5 AI</span>
+              <span className="text-xl font-bold text-purple-400 tracking-tight">Gemini AI</span>
             </div>
           </div>
         </div>
