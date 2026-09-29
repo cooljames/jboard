@@ -168,13 +168,13 @@ export function Sidebar({ isMerged, onToggleMerge, onOpenPanicModal, theme, onTo
       {/* Top Section */}
       <div className="flex flex-col">
         {/* Brand Header */}
-        <div className="h-16 px-4 flex items-center border-b border-slate-800/80 bg-slate-950/50">
+        <div className="py-3 px-4 flex items-center border-b border-slate-800/80 bg-slate-950/50">
           <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform">
-              <Activity className="w-4 h-4 text-white" />
+            <div className="w-10 h-10 rounded-xl shrink-0 bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform">
+              <Activity className="w-5 h-5 text-white" />
             </div>
             <div className="flex flex-col">
-              <span className="font-bold text-white tracking-tight text-base leading-none">
+              <span className="font-extrabold text-white tracking-tight text-[48px] leading-none">
                 J<span className="text-blue-500">quant</span>
               </span>
               <span className="text-[10px] text-slate-400 font-mono tracking-wider">ver 1.0</span>
