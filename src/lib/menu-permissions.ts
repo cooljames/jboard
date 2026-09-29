@@ -54,6 +54,14 @@ export interface MenuItemPermission {
 
 export const DEFAULT_MENU_PERMISSIONS: MenuItemPermission[] = [
   {
+    id: 'home',
+    label: '홈 (서비스 소개)',
+    href: '/home',
+    desc: 'Jquant 플랫폼 및 7대 퀀트 전략 소개 랜딩 페이지',
+    category: '메인 서비스',
+    allowedGrades: ['guest', 'member', 'editor', 'admin'],
+  },
+  {
     id: 'dashboard',
     label: '컨트롤 타워',
     href: '/',

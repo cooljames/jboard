@@ -7,10 +7,15 @@ import { PositionTable, PositionItem } from '@/components/dashboard/position-tab
 import { ExecutionLog, OrderItem } from '@/components/dashboard/execution-log';
 import { AutoTradingControl, AutoTradingStatus } from '@/components/dashboard/auto-trading-control';
 import { fetchJson } from '@/lib/fetch-json';
-import { Sliders, RefreshCw, Zap, TrendingUp, Search, ArrowRight } from 'lucide-react';
+import { Sliders, RefreshCw, Zap, TrendingUp, Search, ArrowRight, Home } from 'lucide-react';
 import { formatKRW } from '@/lib/utils';
+import { LandingHome } from '@/components/landing-home';
 
 export default function DashboardPage() {
+  const [authUser, setAuthUser] = useState<{ id: number; email: string; name: string; role: string } | null>(null);
+  const [authLoaded, setAuthLoaded] = useState(false);
+  const [viewMode, setViewMode] = useState<'dashboard' | 'home'>('dashboard');
+
   const [balance, setBalance] = useState({
     totalAsset: 0,
     cashBalance: 0,
@@ -96,6 +101,19 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
+    fetchJson<{ user: { id: number; email: string; name: string; role: string } | null }>('/api/auth/me')
+      .then((data) => {
+        setAuthUser(data.user || null);
+        if (!data.user) {
+          setViewMode('home');
+        }
+      })
+      .catch(() => {
+        setAuthUser(null);
+        setViewMode('home');
+      })
+      .finally(() => setAuthLoaded(true));
+
     fetchData();
     const interval = setInterval(fetchData, 10000); // Poll every 10s
     return () => clearInterval(interval);
@@ -193,6 +211,31 @@ export default function DashboardPage() {
 
   const activeStrategies = strategies.filter((s) => s.enabled);
 
+  if (authLoaded && viewMode === 'home') {
+    return (
+      <div className="space-y-4">
+        {authUser && (
+          <div className="flex items-center justify-between p-3.5 rounded-2xl bg-blue-950/40 border border-blue-500/30 text-xs">
+            <span className="text-slate-300">
+              현재 <strong className="text-blue-300">{authUser.name}</strong> 계정으로 로그인되어 있습니다.
+            </span>
+            <button
+              type="button"
+              onClick={() => setViewMode('dashboard')}
+              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold transition-all shadow-md shadow-blue-500/20 cursor-pointer"
+            >
+              컨트롤 타워 대시보드로 이동 →
+            </button>
+          </div>
+        )}
+        <LandingHome
+          authUser={authUser}
+          onGoToDashboard={() => setViewMode('dashboard')}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Top Banner / Action Bar */}
@@ -211,12 +254,22 @@ export default function DashboardPage() {
 
         <div className="flex items-center gap-2">
           <button
+            type="button"
+            onClick={() => setViewMode('home')}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800 text-xs font-medium transition-colors cursor-pointer"
+            title="Jquant 서비스 소개 홈 보기"
+          >
+            <Home className="w-3.5 h-3.5 text-blue-400" />
+            <span>서비스 소개(Home)</span>
+          </button>
+
+          <button
             onClick={() => {
               setRefreshing(true);
               fetchData();
             }}
             disabled={refreshing}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800 text-xs font-medium transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800 text-xs font-medium transition-colors cursor-pointer"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
             새로고침

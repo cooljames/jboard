@@ -22,7 +22,9 @@ import {
   Users,
   ScrollText,
   Lock,
-  ShieldCheck
+  ShieldCheck,
+  Home,
+  LogIn
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -115,6 +117,7 @@ export function Sidebar({ isMerged, onToggleMerge, onOpenPanicModal, theme, onTo
   }, [currentTime]);
 
   const navItems = [
+    { label: '홈 (서비스 소개)', href: '/home', icon: Home, desc: 'Jquant 플랫폼 안내' },
     { label: '컨트롤 타워', href: '/', icon: BarChart3, desc: '종합 대시보드' },
     { label: '동적 퀀트 전략', href: '/strategies', icon: Sliders, desc: '알고리즘 가중치 제어' },
     { label: '실시간 검색 & 주문', href: '/trading', icon: ArrowLeftRight, desc: '종목 발굴, 차트 & KIS 주문' },
@@ -169,7 +172,7 @@ export function Sidebar({ isMerged, onToggleMerge, onOpenPanicModal, theme, onTo
       <div className="flex flex-col">
         {/* Brand Header */}
         <div className="py-3 px-4 flex items-center border-b border-slate-800/80 bg-slate-950/50">
-          <Link href="/" className="flex items-center gap-2.5 group">
+          <Link href="/" className="flex items-center gap-2.5 group" title="Jquant 홈(Home)으로 이동">
             <div className="w-10 h-10 rounded-xl shrink-0 bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform">
               <Activity className="w-5 h-5 text-white" />
             </div>
@@ -208,6 +211,32 @@ export function Sidebar({ isMerged, onToggleMerge, onOpenPanicModal, theme, onTo
             <div className="text-xs text-slate-500 font-mono">시계 동기화 중...</div>
           )}
         </div>
+
+        {/* 게스트 로그인 퀵 버튼 */}
+        {currentRole === 'guest' && (
+          <div className="mx-3 mb-2 p-3 rounded-2xl bg-gradient-to-br from-blue-600/15 via-slate-900 to-indigo-600/15 border border-blue-500/30 flex flex-col gap-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-200 font-semibold flex items-center gap-1.5">
+                <LogIn className="w-3.5 h-3.5 text-blue-400" />
+                <span>로그인하고 시작하기</span>
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Link
+                href="/login"
+                className="flex-1 py-1.5 px-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs text-center transition-all shadow-md shadow-blue-600/20"
+              >
+                로그인
+              </Link>
+              <Link
+                href="/signup"
+                className="py-1.5 px-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs text-center transition-all border border-slate-700"
+              >
+                가입
+              </Link>
+            </div>
+          </div>
+        )}
 
         {/* ══ 한글 메뉴 네비게이션 (Requirement 4, 6, 7) ══ */}
         <nav className="px-2.5 space-y-1 mt-1">

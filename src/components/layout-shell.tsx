@@ -24,7 +24,8 @@ import {
 
 
 const PAGE_TITLES: Record<string, { title: string; subtitle: string }> = {
-  '/': { title: '컨트롤 타워 (종합 대시보드)', subtitle: '실시간 자산 추이, 퀀트 성과 및 KIS 20 TPS 엔진' },
+  '/': { title: 'Jquant ver 1.0 (홈 & 컨트롤 타워)', subtitle: '동적 퀀트 트레이딩 & AI 분석 통합 플랫폼' },
+  '/home': { title: 'Jquant ver 1.0 (서비스 소개)', subtitle: '동적 퀀트 트레이딩 & AI 분석 통합 플랫폼' },
   '/strategies': { title: '동적 퀀트 전략 컨트롤러', subtitle: '무중단 알고리즘 ON/OFF 및 가중치 동적 튜닝' },
   '/search': { title: '실시간 검색 & 주문 체결', subtitle: '종목 실시간 발굴, TradingView 차트, Gemini AI 분석 및 KIS 수동 주문 체결' },
   '/trading': { title: '실시간 검색 & 주문 체결', subtitle: '종목 실시간 발굴, TradingView 차트, Gemini AI 분석 및 KIS 수동 주문 체결' },
