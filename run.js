@@ -30,14 +30,18 @@ try {
   console.warn('  ! 포트 정리 중 경고:', err.message);
 }
 
-// 2. Python 런처 식별 (py 우선, 없으면 python)
+// 2. Python 런처 식별 (가상환경 우선, py, python 순)
 function getPythonCommand() {
+  const fs = require('fs');
+  const venvWin = path.join(__dirname, 'python_engine', 'venv', 'Scripts', 'python.exe');
+  if (fs.existsSync(venvWin)) return venvWin;
+  const venvUnix = path.join(__dirname, 'python_engine', 'venv', 'bin', 'python');
+  if (fs.existsSync(venvUnix)) return venvUnix;
   try {
-    spawnSync('py', ['--version'], { stdio: 'ignore' });
-    return 'py';
-  } catch {
-    return 'python';
-  }
+    const res = spawnSync('py', ['--version'], { stdio: 'ignore' });
+    if (!res.error && res.status === 0) return 'py';
+  } catch {}
+  return 'python';
 }
 const pyCmd = getPythonCommand();
 

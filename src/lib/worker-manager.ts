@@ -1,5 +1,7 @@
-import { spawn, execFile, type ChildProcess } from 'node:child_process';
+import { spawn, spawnSync, execFile, type ChildProcess } from 'node:child_process';
 import { promisify } from 'node:util';
+import path from 'node:path';
+import fs from 'node:fs';
 
 // Python 워커 프로세스 매니저 (로컬 dev 서버 전용).
 // 컨트롤타워 버튼만으로 워커를 켜고 끌 수 있게 한다.
@@ -108,8 +110,47 @@ export function getWorkerState(): WorkerState {
   };
 }
 
+/** 사용 가능한 Python 실행 파일 경로 탐색 */
+export function findPythonCommand(): string | null {
+  if (process.env.PYTHON_PATH && fs.existsSync(process.env.PYTHON_PATH)) {
+    return process.env.PYTHON_PATH;
+  }
+
+  // 1. 프로젝트 내부 가상환경 (Windows / POSIX)
+  const venvCandidates = [
+    path.join(process.cwd(), 'python_engine', 'venv', 'Scripts', 'python.exe'),
+    path.join(process.cwd(), 'python_engine', '.venv', 'Scripts', 'python.exe'),
+    path.join(process.cwd(), 'venv', 'Scripts', 'python.exe'),
+    path.join(process.cwd(), 'python_engine', 'venv', 'bin', 'python'),
+    path.join(process.cwd(), 'python_engine', '.venv', 'bin', 'python'),
+    path.join(process.cwd(), 'venv', 'bin', 'python'),
+  ];
+  for (const cand of venvCandidates) {
+    if (fs.existsSync(cand)) return cand;
+  }
+
+  // 2. 시스템 PATH 상의 실행기 탐색 (py, python, python3)
+  const systemCandidates = process.platform === 'win32' ? ['py', 'python', 'python3'] : ['python3', 'python'];
+  for (const cmd of systemCandidates) {
+    try {
+      const res = spawnSync(cmd, ['--version'], { stdio: 'ignore', windowsHide: true });
+      if (!res.error && res.status === 0) return cmd;
+    } catch {}
+  }
+
+  return null;
+}
+
 /** 워커 부팅 (이미 떠 있으면 그대로 사용) */
 export async function bootWorker(): Promise<{ ok: boolean; pid?: number; message: string }> {
+  // Vercel 등 클라우드 서버리스 환경 가드
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    return {
+      ok: false,
+      message: 'Vercel 서버리스 환경에서는 백그라운드 Python 워커를 직접 실행할 수 없습니다. 워커는 로컬 PC에서 실행하거나(run.bat 또는 python_engine), 외부 워커 URL(PYTHON_WORKER_URL)을 연동해야 합니다.',
+    };
+  }
+
   const port = getWorkerPort();
   if (port < 0) {
     return { ok: false, message: '원격 워커 주소이므로 버튼으로 켤 수 없습니다.' };
@@ -121,6 +162,14 @@ export async function bootWorker(): Promise<{ ok: boolean; pid?: number; message
   if (child && child.exitCode === null && !child.killed) {
     return { ok: false, message: '워커 시작 처리 중입니다. 잠시 후 다시 시도하세요.' };
   }
+
+  const pythonCmd = findPythonCommand();
+  if (!pythonCmd) {
+    return {
+      ok: false,
+      message: 'Python 실행기(python/py)를 찾을 수 없습니다. Python 3.10+ 설치 또는 python_engine/venv 가상환경을 확인해주세요.',
+    };
+  }
   return await new Promise<{ ok: boolean; pid?: number; message: string }>((resolve) => {
     let done = false;
     const finish = (v: { ok: boolean; pid?: number; message: string }) => {
@@ -131,13 +180,13 @@ export async function bootWorker(): Promise<{ ok: boolean; pid?: number; message
     };
     try {
       const proc = spawn(
-        'py',
+        pythonCmd,
         ['-m', 'uvicorn', 'python_engine.main:app', '--host', '127.0.0.1', '--port', String(port)],
         { cwd: process.cwd(), windowsHide: true },
       );
       child = proc;
       spawnTime = Date.now();
-      pushLog(`[manager] worker spawn started (PID ${proc.pid})`);
+      pushLog(`[manager] worker spawn started (${pythonCmd}, PID ${proc.pid})`);
       proc.stdout?.on('data', (d) => pushLog(d.toString()));
       proc.stderr?.on('data', (d) => pushLog(d.toString()));
       proc.on('error', (err) => {
