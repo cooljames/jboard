@@ -1,42 +1,68 @@
 import { NextResponse } from 'next/server';
 import { kisClient } from '@/lib/kis-client';
 import { getRealDailyCandles, getRealQuote } from '@/lib/real-market';
-
-// Major Korean stocks master list
-const KOREAN_STOCKS = [
-  { ticker: '005930', name: '삼성전자', market: 'KOSPI', sector: '반도체' },
-  { ticker: '000660', name: 'SK하이닉스', market: 'KOSPI', sector: '반도체' },
-  { ticker: '373220', name: 'LG에너지솔루션', market: 'KOSPI', sector: '2차전지' },
-  { ticker: '207940', name: '삼성바이오로직스', market: 'KOSPI', sector: '바이오' },
-  { ticker: '005380', name: '현대차', market: 'KOSPI', sector: '자동차' },
-  { ticker: '000270', name: '기아', market: 'KOSPI', sector: '자동차' },
-  { ticker: '068270', name: '셀트리온', market: 'KOSPI', sector: '바이오' },
-  { ticker: '035420', name: 'NAVER', market: 'KOSPI', sector: '인터넷' },
-  { ticker: '035720', name: '카카오', market: 'KOSPI', sector: '인터넷' },
-  { ticker: '005490', name: 'POSCO홀딩스', market: 'KOSPI', sector: '철강' },
-  { ticker: '105560', name: 'KB금융', market: 'KOSPI', sector: '금융' },
-  { ticker: '055550', name: '신한지주', market: 'KOSPI', sector: '금융' },
-  { ticker: '051910', name: 'LG화학', market: 'KOSPI', sector: '화학' },
-  { ticker: '247540', name: '에코프로비엠', market: 'KOSDAQ', sector: '2차전지' },
-  { ticker: '086520', name: '에코프로', market: 'KOSDAQ', sector: '2차전지' },
-  { ticker: '028300', name: 'HLB', market: 'KOSDAQ', sector: '바이오' },
-  { ticker: '277810', name: '레인보우로보틱스', market: 'KOSDAQ', sector: '로봇' },
-];
+import { ALL_SECURITIES, searchSecurities, MarketType, MarketSecurity } from '@/lib/stock-universe';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const q = searchParams.get('q');
   const ticker = searchParams.get('ticker');
   const type = searchParams.get('type'); // 'search' | 'candles' | 'quote' | 'stocks'
+  const market = searchParams.get('market') as MarketType | 'ALL' | null;
 
-  // 1. Search Query
+  // 1. Search Query (KOSPI, KOSDAQ, ETF, ETN & Dynamic 6-digit Ticker Lookup)
   if (type === 'search' || q) {
-    const query = (q || '').trim().toLowerCase();
-    const filtered = KOREAN_STOCKS.filter(
-      (s) => s.ticker.includes(query) || s.name.toLowerCase().includes(query)
-    );
-    return NextResponse.json({ results: filtered });
+    const rawQuery = (q || '').trim();
+    let results = searchSecurities(rawQuery, market || 'ALL');
+
+    // 1-1. 마스터 검색 결과가 없을 경우 파이썬 엔진 실시간 검색 폴백
+    if (results.length === 0 && rawQuery) {
+      try {
+        const pyRes = await fetch(`http://127.0.0.1:8000/api/market/search?q=${encodeURIComponent(rawQuery)}&market=${market || 'ALL'}`, {
+          signal: AbortSignal.timeout(1500),
+        });
+        if (pyRes.ok) {
+          const pyData = await pyRes.json();
+          if (pyData.results && pyData.results.length > 0) {
+            results = pyData.results;
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 6자리 숫자 종목코드 직입력 시, 마스터에 없더라도 실시간 시세 API로 즉시 종목 메타 데이터 자동 합성
+    if (/^\d{6}$/.test(rawQuery) && !results.some((r) => r.ticker === rawQuery)) {
+      try {
+        const liveQ = await getRealQuote(rawQuery);
+        if (liveQ && liveQ.price > 0 && liveQ.name && liveQ.name !== `종목-${rawQuery}`) {
+          let detectedMarket: MarketType = 'KOSPI';
+          const nm = liveQ.name.toUpperCase();
+          if (rawQuery.startsWith('5')) {
+            detectedMarket = 'ETN';
+          } else if (nm.includes('KODEX') || nm.includes('TIGER') || nm.includes('ACE') || nm.includes('SOL') || nm.includes('RISE') || nm.includes('ETF')) {
+            detectedMarket = 'ETF';
+          } else if (liveQ.market === 'KOSDAQ') {
+            detectedMarket = 'KOSDAQ';
+          }
+
+          const dynamicSecurity: MarketSecurity = {
+            ticker: rawQuery,
+            name: liveQ.name,
+            market: detectedMarket,
+          };
+          results = [dynamicSecurity, ...results];
+        }
+      } catch {}
+    }
+
+    return NextResponse.json({ results });
   }
+
+  // 1-1. All stocks list request
+  if (type === 'stocks') {
+    return NextResponse.json({ stocks: ALL_SECURITIES });
+  }
+
 
   // 2. Candlestick Data for TradingView chart (100% Real Live Daily Candles)
   if (type === 'candles' && ticker) {
@@ -91,7 +117,7 @@ export async function GET(request: Request) {
   // 4. Default: Return balance and major stock quotes
   try {
     const balance = await kisClient.getAccountBalance();
-    return NextResponse.json({ balance, stocks: KOREAN_STOCKS });
+    return NextResponse.json({ balance, stocks: ALL_SECURITIES });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }

@@ -24,43 +24,6 @@ function withSource(row: any) {
   return { ...row, source };
 }
 
-function mockOrders() {
-  return [
-    {
-      id: 1,
-      strategyId: 'volatility_breakout',
-      source: 'AUTO' as OrderSource,
-      ticker: '005930',
-      tickerName: '삼성전자',
-      side: 'BUY',
-      orderType: '00',
-      price: '61500',
-      quantity: 50,
-      executedPrice: '61500',
-      executedQuantity: 50,
-      kisOrderNo: 'OD-98214',
-      status: 'EXECUTED',
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: 2,
-      strategyId: 'MANUAL',
-      source: 'MANUAL' as OrderSource,
-      ticker: '000660',
-      tickerName: 'SK하이닉스',
-      side: 'BUY',
-      orderType: '00',
-      price: '184500',
-      quantity: 15,
-      executedPrice: '184500',
-      executedQuantity: 15,
-      kisOrderNo: 'OD-98215',
-      status: 'EXECUTED',
-      createdAt: new Date(Date.now() - 3600000).toISOString(),
-    },
-  ];
-}
-
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const sourceParam = normalizeParam(searchParams.get('source')).toUpperCase();
@@ -160,18 +123,14 @@ export async function GET(request: Request) {
         // fall through to mock
       }
     }
-    console.warn('[API Orders GET] Falling back to simulated order list:', error.message);
-    let mocks = mockOrders();
-    if (VALID_SOURCES.includes(sourceParam as OrderSource)) {
-      mocks = mocks.filter((m) => m.source === sourceParam);
-    }
-    const counts = {
-      ALL: mockOrders().length,
-      AUTO: mockOrders().filter((m) => m.source === 'AUTO').length,
-      MANUAL: mockOrders().filter((m) => m.source === 'MANUAL').length,
-      PANIC: 0,
-    };
-    return NextResponse.json({ orders: mocks, total: mocks.length, limit, offset, counts });
+    console.warn('[API Orders GET] Database query failed or uninitialized:', error.message);
+    return NextResponse.json({
+      orders: [],
+      total: 0,
+      limit,
+      offset,
+      counts: { ALL: 0, AUTO: 0, MANUAL: 0, PANIC: 0 },
+    });
   }
 }
 

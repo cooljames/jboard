@@ -20,7 +20,15 @@ import {
   Users,
   UserCheck,
   UserX,
-  ShieldCheck
+  ShieldCheck,
+  Check,
+  X,
+  Key,
+  BarChart3,
+  ArrowLeftRight,
+  ScrollText,
+  Save,
+  HelpCircle
 } from 'lucide-react';
 
 export default function AdminPage() {
@@ -28,7 +36,13 @@ export default function AdminPage() {
   const [data, setData] = useState<any>(null);
   const [posts, setPosts] = useState<any[]>([]);
   const [members, setMembers] = useState<any[]>([]);
-  const [adminTab, setAdminTab] = useState<'system' | 'members' | 'posts'>('system');
+  const [permissions, setPermissions] = useState<any[]>([]);
+  const [grades, setGrades] = useState<any[]>([]);
+  const [savingPermissions, setSavingPermissions] = useState(false);
+  const [permissionsDirty, setPermissionsDirty] = useState(false);
+  const [permissionCategory, setPermissionCategory] = useState<string>('ALL');
+
+  const [adminTab, setAdminTab] = useState<'system' | 'members' | 'posts' | 'permissions'>('system');
   const [updating, setUpdating] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -39,18 +53,116 @@ export default function AdminPage() {
   const [autoPanicPct, setAutoPanicPct] = useState('5.0');
 
   useEffect(() => {
-    // Check URL query param ?tab=members
+    // Check URL query param ?tab=members | permissions | posts
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const tab = params.get('tab');
       if (tab === 'members') setAdminTab('members');
       if (tab === 'posts') setAdminTab('posts');
+      if (tab === 'permissions') setAdminTab('permissions');
     }
 
     fetchAdminData();
     fetchBoardPosts();
     fetchMembers();
+    fetchPermissions();
   }, []);
+
+  const fetchPermissions = async () => {
+    try {
+      const res = await fetch('/api/admin/permissions');
+      if (res.ok) {
+        const json = await res.json();
+        setPermissions(json.permissions || []);
+        if (json.grades) setGrades(json.grades);
+      }
+    } catch (err) {
+      console.error('Failed to fetch permissions:', err);
+    }
+  };
+
+  const handleToggleGrade = (id: string, grade: string) => {
+    if (grade === 'admin') return; // Admin is always locked
+    setPermissions((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item;
+        const currentGrades: string[] = item.allowedGrades || [];
+        const hasGrade = currentGrades.includes(grade);
+        const nextGrades = hasGrade
+          ? currentGrades.filter((g) => g !== grade)
+          : [...currentGrades, grade];
+        return {
+          ...item,
+          allowedGrades: Array.from(new Set([...nextGrades, 'admin'])),
+        };
+      })
+    );
+    setPermissionsDirty(true);
+  };
+
+  const handleSetQuickPreset = (id: string, preset: 'all' | 'member' | 'editor' | 'admin') => {
+    const gradeMap: Record<string, string[]> = {
+      all: ['guest', 'member', 'editor', 'admin'],
+      member: ['member', 'editor', 'admin'],
+      editor: ['editor', 'admin'],
+      admin: ['admin'],
+    };
+    setPermissions((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item;
+        return { ...item, allowedGrades: gradeMap[preset] };
+      })
+    );
+    setPermissionsDirty(true);
+  };
+
+  const handleSavePermissions = async () => {
+    setSavingPermissions(true);
+    try {
+      const res = await fetch('/api/admin/permissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ permissions }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setNotice('✅ 메뉴별 접근 권한이 성공적으로 저장되었습니다.');
+        setPermissionsDirty(false);
+        setTimeout(() => setNotice(null), 3500);
+        if (json.permissions) setPermissions(json.permissions);
+      } else {
+        setNotice(`❌ 저장 실패: ${json.error || '권한 저장 오류'}`);
+        setTimeout(() => setNotice(null), 4000);
+      }
+    } catch (err: any) {
+      alert(`저장 오류: ${err.message}`);
+    } finally {
+      setSavingPermissions(false);
+    }
+  };
+
+  const handleResetPermissions = async () => {
+    if (!confirm('정말로 모든 메뉴 권한을 시스템 기본값으로 초기화하시겠습니까?')) return;
+    setSavingPermissions(true);
+    try {
+      const res = await fetch('/api/admin/permissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reset' }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setNotice('🔄 메뉴 접근 권한이 시스템 기본값으로 복원되었습니다.');
+        setPermissionsDirty(false);
+        setTimeout(() => setNotice(null), 3500);
+        if (json.permissions) setPermissions(json.permissions);
+      }
+    } catch (err: any) {
+      alert(`초기화 오류: ${err.message}`);
+    } finally {
+      setSavingPermissions(false);
+    }
+  };
 
   const fetchMembers = async () => {
     try {
@@ -274,6 +386,22 @@ export default function AdminPage() {
         >
           <MessageSquare className="w-4 h-4" />
           <span>게시판 모더레이션 ({posts.length})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setAdminTab('permissions')}
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+            adminTab === 'permissions'
+              ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25'
+              : 'bg-slate-900/80 border border-slate-800 text-slate-400 hover:text-white'
+          }`}
+        >
+          <ShieldCheck className="w-4 h-4 text-emerald-400" />
+          <span>등급별 메뉴 접근 권한 제어 ({permissions.length})</span>
+          {permissionsDirty && (
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+          )}
         </button>
       </div>
 
@@ -663,6 +791,369 @@ export default function AdminPage() {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* ══ TAB 4: GRADE-BASED MENU ACCESS CONTROL (RBAC Matrix) ══ */}
+      {adminTab === 'permissions' && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          {/* Top Info Banner & Action Strip */}
+          <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-sm space-y-4">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+              <div>
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                  <h2 className="text-base font-bold text-white tracking-tight">
+                    사용자 등급(Grade)별 메뉴 접근 권한 매트릭스
+                  </h2>
+                </div>
+                <p className="text-xs text-slate-400 mt-1">
+                  플랫폼 내 각 주요 기능 및 페이지 메뉴에 대한 인가(Authorization)를 사용자 역할 등급별로 세분화하여 통제합니다.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={handleResetPermissions}
+                  disabled={savingPermissions}
+                  className="px-3 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer flex items-center gap-1.5"
+                  title="기본값 복원"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
+                  <span>기본 정책 복원</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Set all non-admin to member+ (strict)
+                    setPermissions((prev) =>
+                      prev.map((item) => {
+                        if (item.category === '관리자 & 설정') return item;
+                        return { ...item, allowedGrades: ['member', 'editor', 'admin'] };
+                      })
+                    );
+                    setPermissionsDirty(true);
+                  }}
+                  className="px-3 py-2 rounded-xl text-xs font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>일괄 보안 강화 (회원 전용)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSavePermissions}
+                  disabled={savingPermissions}
+                  className={`px-5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shadow-lg ${
+                    permissionsDirty
+                      ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30 animate-pulse'
+                      : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/30'
+                  }`}
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{savingPermissions ? '저장 중...' : permissionsDirty ? '변경사항 저장하기 (저장 필요)' : '권한 정책 저장'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* User Grades Explanation Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+              <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-slate-500" /> 게스트 (Guest)
+                  </span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-mono">비회원</span>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  로그인하지 않은 방문자. 공개 허용된 대시보드 및 게시판만 접근 가능.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-blue-400 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-blue-500" /> 일반 회원 (Member)
+                  </span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20 font-mono">기본 등급</span>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  가입 승인된 정회원. 실시간 종목 시세 조회 및 기본 주문/매매일지 열람.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" /> 우수 / 에디터 (Editor)
+                  </span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-mono">고급 등급</span>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  퀀트 전략 가중치 변경, 알고리즘 ON/OFF 및 전략 파라미터 제어 권한.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-purple-400 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-purple-500" /> 최고 관리자 (Admin)
+                  </span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-500/20 font-mono">영구 전권</span>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  인프라 킬스위치, KIS Token Bucket, API Key 환경설정, 회원 등급 관리.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Category Filter Tabs */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+            <span className="text-xs font-semibold text-slate-400 me-1 hidden sm:inline">카테고리 필터:</span>
+            {['ALL', '메인 서비스', '퀀트 & 매매', '커뮤니티', '관리자 & 설정'].map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setPermissionCategory(cat)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap border ${
+                  permissionCategory === cat
+                    ? 'bg-blue-600 text-white border-blue-500 shadow-sm'
+                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                }`}
+              >
+                {cat === 'ALL' ? '전체 메뉴 (8)' : cat}
+              </button>
+            ))}
+          </div>
+
+          {/* Permissions Matrix Table */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 overflow-hidden shadow-sm backdrop-blur-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-950/80 border-b border-slate-800 text-slate-300 uppercase tracking-wider font-semibold">
+                  <tr>
+                    <th className="py-3.5 px-4 w-72">메뉴 및 기능 설명</th>
+                    <th className="py-3.5 px-3 w-28 text-center">카테고리</th>
+                    <th className="py-3.5 px-3 w-32 text-center text-slate-400 font-bold">
+                      🌐 게스트<br /><span className="text-[10px] font-normal lowercase">(guest)</span>
+                    </th>
+                    <th className="py-3.5 px-3 w-32 text-center text-blue-400 font-bold">
+                      👤 일반 회원<br /><span className="text-[10px] font-normal lowercase">(member)</span>
+                    </th>
+                    <th className="py-3.5 px-3 w-32 text-center text-emerald-400 font-bold">
+                      ⭐ 우수/에디터<br /><span className="text-[10px] font-normal lowercase">(editor)</span>
+                    </th>
+                    <th className="py-3.5 px-3 w-32 text-center text-purple-400 font-bold">
+                      👑 최고 관리자<br /><span className="text-[10px] font-normal lowercase">(admin - 고정)</span>
+                    </th>
+                    <th className="py-3.5 px-4 w-44 text-center">현재 인가 정책</th>
+                    <th className="py-3.5 px-4 text-center w-52">빠른 등급 설정</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {permissions
+                    .filter((p) => permissionCategory === 'ALL' || p.category === permissionCategory)
+                    .map((item) => {
+                      const allowed: string[] = item.allowedGrades || [];
+                      const hasGuest = allowed.includes('guest');
+                      const hasMember = allowed.includes('member');
+                      const hasEditor = allowed.includes('editor');
+                      const hasAdmin = allowed.includes('admin');
+
+                      let summaryText = '사용자 맞춤형';
+                      let summaryBadge = 'bg-amber-500/10 text-amber-300 border-amber-500/20';
+
+                      if (hasGuest && hasMember && hasEditor && hasAdmin) {
+                        summaryText = '전체 공개 (게스트 포함)';
+                        summaryBadge = 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30';
+                      } else if (!hasGuest && hasMember && hasEditor && hasAdmin) {
+                        summaryText = '일반 정회원 이상';
+                        summaryBadge = 'bg-blue-500/10 text-blue-300 border-blue-500/30';
+                      } else if (!hasGuest && !hasMember && hasEditor && hasAdmin) {
+                        summaryText = '우수 / 에디터 이상';
+                        summaryBadge = 'bg-purple-500/10 text-purple-300 border-purple-500/30';
+                      } else if (!hasGuest && !hasMember && !hasEditor && hasAdmin) {
+                        summaryText = '최고 관리자 전용';
+                        summaryBadge = 'bg-rose-500/10 text-rose-300 border-rose-500/30';
+                      }
+
+                      return (
+                        <tr key={item.id} className="hover:bg-slate-800/25 transition-colors">
+                          {/* Menu Meta */}
+                          <td className="py-3.5 px-4">
+                            <div className="flex items-start gap-3">
+                              <div className="p-2 rounded-xl bg-slate-950 border border-slate-800 text-blue-400 flex-shrink-0 mt-0.5">
+                                {item.id === 'dashboard' && <BarChart3 className="w-4 h-4 text-blue-400" />}
+                                {item.id === 'strategies' && <Sliders className="w-4 h-4 text-purple-400" />}
+                                {item.id === 'trading' && <ArrowLeftRight className="w-4 h-4 text-emerald-400" />}
+                                {item.id === 'logs' && <ScrollText className="w-4 h-4 text-indigo-400" />}
+                                {item.id === 'board' && <MessageSquare className="w-4 h-4 text-amber-400" />}
+                                {item.id === 'members' && <Users className="w-4 h-4 text-cyan-400" />}
+                                {item.id === 'settings' && <Key className="w-4 h-4 text-rose-400" />}
+                                {item.id === 'admin' && <ShieldAlert className="w-4 h-4 text-red-500" />}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="font-bold text-white text-sm flex items-center gap-1.5">
+                                  <span>{item.label}</span>
+                                  <span className="font-mono text-[11px] text-slate-500 font-normal">({item.href})</span>
+                                </div>
+                                <div className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">
+                                  {item.desc}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Category Badge */}
+                          <td className="py-3.5 px-3 text-center">
+                            <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-slate-800 text-slate-400 border border-slate-700/60">
+                              {item.category}
+                            </span>
+                          </td>
+
+                          {/* Guest Checkbox */}
+                          <td className="py-3.5 px-3 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleGrade(item.id, 'guest')}
+                              className={`p-2 rounded-xl border transition-all cursor-pointer inline-flex items-center justify-center ${
+                                hasGuest
+                                  ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400 shadow-sm'
+                                  : 'bg-slate-950 border-slate-800 text-slate-600 hover:text-slate-400'
+                              }`}
+                              title={hasGuest ? '게스트 접근 허용됨' : '게스트 차단됨'}
+                            >
+                              {hasGuest ? <Check className="w-4 h-4 font-bold" /> : <X className="w-4 h-4" />}
+                            </button>
+                          </td>
+
+                          {/* Member Checkbox */}
+                          <td className="py-3.5 px-3 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleGrade(item.id, 'member')}
+                              className={`p-2 rounded-xl border transition-all cursor-pointer inline-flex items-center justify-center ${
+                                hasMember
+                                  ? 'bg-blue-500/15 border-blue-500/40 text-blue-400 shadow-sm'
+                                  : 'bg-slate-950 border-slate-800 text-slate-600 hover:text-slate-400'
+                              }`}
+                              title={hasMember ? '일반 회원 접근 허용됨' : '일반 회원 차단됨'}
+                            >
+                              {hasMember ? <Check className="w-4 h-4 font-bold" /> : <X className="w-4 h-4" />}
+                            </button>
+                          </td>
+
+                          {/* Editor Checkbox */}
+                          <td className="py-3.5 px-3 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleGrade(item.id, 'editor')}
+                              className={`p-2 rounded-xl border transition-all cursor-pointer inline-flex items-center justify-center ${
+                                hasEditor
+                                  ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400 shadow-sm'
+                                  : 'bg-slate-950 border-slate-800 text-slate-600 hover:text-slate-400'
+                              }`}
+                              title={hasEditor ? '에디터 접근 허용됨' : '에디터 차단됨'}
+                            >
+                              {hasEditor ? <Check className="w-4 h-4 font-bold" /> : <X className="w-4 h-4" />}
+                            </button>
+                          </td>
+
+                          {/* Admin Checkbox (Permanently Locked / Always Checked) */}
+                          <td className="py-3.5 px-3 text-center">
+                            <div
+                              className="p-2 rounded-xl border border-purple-500/40 bg-purple-500/15 text-purple-300 inline-flex items-center justify-center cursor-not-allowed opacity-90"
+                              title="관리자는 시스템 안전을 위해 항상 모든 메뉴에 접근할 수 있습니다 (영구 허용)"
+                            >
+                              <Check className="w-4 h-4 font-bold" />
+                            </div>
+                          </td>
+
+                          {/* Permission Summary Badge */}
+                          <td className="py-3.5 px-4 text-center">
+                            <span className={`inline-block text-[11px] font-bold px-2.5 py-1 rounded-lg border ${summaryBadge}`}>
+                              {summaryText}
+                            </span>
+                          </td>
+
+                          {/* Quick Preset Buttons */}
+                          <td className="py-3.5 px-4 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleSetQuickPreset(item.id, 'all')}
+                                className="px-2 py-1 rounded text-[10px] font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                                title="비회원 포함 전체 공개"
+                              >
+                                전체
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleSetQuickPreset(item.id, 'member')}
+                                className="px-2 py-1 rounded text-[10px] font-semibold bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/20 transition-colors cursor-pointer"
+                                title="정회원 이상 허용"
+                              >
+                                회원+
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleSetQuickPreset(item.id, 'editor')}
+                                className="px-2 py-1 rounded text-[10px] font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/20 transition-colors cursor-pointer"
+                                title="우수/에디터 이상 허용"
+                              >
+                                에디터+
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleSetQuickPreset(item.id, 'admin')}
+                                className="px-2 py-1 rounded text-[10px] font-semibold bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/20 transition-colors cursor-pointer"
+                                title="최고 관리자 전용"
+                              >
+                                관리자
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Sticky Alert Bar if Unsaved Changes */}
+          {permissionsDirty && (
+            <div className="sticky bottom-6 p-4 rounded-2xl bg-gradient-to-r from-amber-950/90 to-slate-900 border border-amber-500/40 shadow-2xl flex items-center justify-between gap-4 backdrop-blur-md animate-in slide-in-from-bottom-2">
+              <div className="flex items-center gap-2.5 text-amber-300">
+                <AlertTriangle className="w-5 h-5 flex-shrink-0 animate-bounce" />
+                <div>
+                  <div className="text-xs font-bold text-white">메뉴별 접근 권한에 저장되지 않은 변경사항이 있습니다.</div>
+                  <div className="text-[11px] text-amber-400/90">변경한 인가 정책을 시스템에 즉시 반영하려면 저장을 눌러주세요.</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={fetchPermissions}
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+                >
+                  취소
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSavePermissions}
+                  disabled={savingPermissions}
+                  className="px-5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-950 transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{savingPermissions ? '저장 중...' : '지금 변경사항 적용하기'}</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

@@ -20,7 +20,9 @@ import {
   Sun,
   Moon,
   Users,
-  ScrollText
+  ScrollText,
+  Lock,
+  ShieldCheck
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -29,17 +31,28 @@ interface SidebarProps {
   onOpenPanicModal: () => void;
   theme: 'dark' | 'light';
   onToggleTheme: () => void;
+  userRole?: string | null;
 }
 
-export function Sidebar({ isMerged, onToggleMerge, onOpenPanicModal, theme, onToggleTheme }: SidebarProps) {
+export function Sidebar({ isMerged, onToggleMerge, onOpenPanicModal, theme, onToggleTheme, userRole }: SidebarProps) {
 
   const pathname = usePathname();
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
+  const [permissions, setPermissions] = useState<any[]>([]);
   const [marketStatus, setMarketStatus] = useState<{ text: string; color: string; badge: string }>({
     text: '확인 중...',
     color: 'text-slate-400',
     badge: 'bg-slate-800 text-slate-400',
   });
+
+  useEffect(() => {
+    fetch('/api/admin/permissions')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.permissions) setPermissions(d.permissions);
+      })
+      .catch(() => {});
+  }, []);
 
   // Real-time clock update (every 1 second)
   useEffect(() => {
@@ -107,11 +120,28 @@ export function Sidebar({ isMerged, onToggleMerge, onOpenPanicModal, theme, onTo
     { label: '실시간 검색 & 주문', href: '/trading', icon: ArrowLeftRight, desc: '종목 발굴, 차트 & KIS 주문' },
     { label: '매매 일지', href: '/logs', icon: ScrollText, desc: '자동/수동 체결 로그' },
     { label: '커뮤니티 게시판', href: '/board', icon: MessageSquare, desc: '전략 토론 & 일지' },
+    { label: '메뉴 접근 권한', href: '/admin?tab=permissions', icon: ShieldCheck, desc: '등급별 메뉴 통제' },
     { label: '회원 & 권한 관리', href: '/admin?tab=members', icon: Users, desc: 'jboard 회원 제어' },
     { label: '시스템 환경 설정', href: '/settings', icon: Key, desc: 'KIS & Gemini API' },
     { label: '통합 관리자', href: '/admin', icon: ShieldAlert, desc: '서버 & 킬스위치 제어' },
   ];
 
+  const currentRole = userRole || 'guest';
+
+  const checkItemAccess = (href: string) => {
+    if (currentRole === 'admin') return { allowed: true };
+    const perm = permissions.find((p) => p.href === href || (href.startsWith(p.href) && p.href !== '/'));
+    if (!perm) return { allowed: true };
+    const allowed = perm.allowedGrades?.includes(currentRole);
+    return {
+      allowed: !!allowed,
+      minRequired: perm.allowedGrades?.includes('member')
+        ? '정회원 전용'
+        : perm.allowedGrades?.includes('editor')
+        ? '에디터 전용'
+        : '최고 관리자 전용',
+    };
+  };
 
   const formatKoreanDate = (d: Date) => {
     const days = ['일', '월', '화', '수', '목', '금', '토'];
@@ -181,12 +211,39 @@ export function Sidebar({ isMerged, onToggleMerge, onOpenPanicModal, theme, onTo
 
         {/* ══ 한글 메뉴 네비게이션 (Requirement 4, 6, 7) ══ */}
         <nav className="px-2.5 space-y-1 mt-1">
-          <div className="px-2 py-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-            메인 메뉴
+          <div className="px-2 py-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between">
+            <span>메인 메뉴</span>
+            <span className="text-[9px] text-slate-600 font-normal">
+              {currentRole === 'admin' ? '전체 해제' : currentRole === 'editor' ? '에디터 등급' : currentRole === 'member' ? '정회원 등급' : '게스트'}
+            </span>
           </div>
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = pathname === item.href || (item.href === '/trading' && pathname === '/search');
+            const access = checkItemAccess(item.href);
+
+            if (!access.allowed) {
+              return (
+                <div
+                  key={item.href}
+                  onClick={() => alert(`🔒 [접근 제한] '${item.label}' 메뉴는 ${access.minRequired} 기능입니다. 관리자에게 권한 승인을 요청하세요.`)}
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-slate-500 hover:text-slate-400 hover:bg-slate-900/40 transition-all cursor-not-allowed opacity-60 group select-none"
+                  title={`접근 제한: ${access.minRequired}`}
+                >
+                  <Icon className="w-4 h-4 flex-shrink-0 text-slate-600" />
+                  <div className="flex flex-col flex-1 leading-tight min-w-0">
+                    <span className="flex items-center gap-1.5 truncate">
+                      <span>{item.label}</span>
+                      <Lock className="w-3 h-3 text-amber-500/80" />
+                    </span>
+                    <span className="text-[10px] text-amber-500/70">
+                      {access.minRequired}
+                    </span>
+                  </div>
+                </div>
+              );
+            }
+
             return (
               <Link
                 key={item.href}

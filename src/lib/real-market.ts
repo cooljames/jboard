@@ -25,7 +25,10 @@ export interface RealQuote {
   market?: string;
 }
 
-const STOCK_NAME_MAP: Record<string, string> = {
+import { ALL_SECURITIES } from './stock-universe';
+
+export const STOCK_NAME_MAP: Record<string, string> = {
+  ...Object.fromEntries(ALL_SECURITIES.map((s) => [s.ticker, s.name])),
   '005930': '삼성전자',
   '000660': 'SK하이닉스',
   '373220': 'LG에너지솔루션',
@@ -44,6 +47,7 @@ const STOCK_NAME_MAP: Record<string, string> = {
   '028300': 'HLB',
   '277810': '레인보우로보틱스',
 };
+
 
 /**
  * Fetch real daily OHLCV candlestick data from live market provider
@@ -101,16 +105,21 @@ export async function getRealDailyCandles(ticker: string, count: number = 60): P
   return generateFallbackCandles(ticker, count);
 }
 
-/**
- * Fetch live current stock quote
- */
+const QUOTE_CACHE: Record<string, { time: number; data: RealQuote }> = {};
+const QUOTE_CACHE_TTL = 3000; // 3 seconds in-memory cache
+
 export async function getRealQuote(ticker: string): Promise<RealQuote> {
+  const cached = QUOTE_CACHE[ticker];
+  if (cached && Date.now() - cached.time < QUOTE_CACHE_TTL) {
+    return cached.data;
+  }
+
   const stockName = STOCK_NAME_MAP[ticker] || `종목-${ticker}`;
 
   try {
     const url = `https://m.stock.naver.com/api/stock/${ticker}/basic`;
     const res = await fetch(url, {
-      next: { revalidate: 5 }, // 5-second revalidation
+      next: { revalidate: 3 }, // 3-second revalidation
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
       },
@@ -126,7 +135,24 @@ export async function getRealQuote(ticker: string): Promise<RealQuote> {
       const volume = parseInt(String(data.accumulatedTradingVolume || '0').replace(/,/g, ''), 10);
 
       if (price > 0) {
-        return {
+        let mkt = data.stockExchangeType?.name || 'KOSPI';
+        const rawNm = (data.stockName || stockName || '').toUpperCase();
+        if (ticker.startsWith('5') || rawNm.includes('ETN')) {
+          mkt = 'ETN';
+        } else if (
+          rawNm.includes('ETF') ||
+          rawNm.includes('KODEX') ||
+          rawNm.includes('TIGER') ||
+          rawNm.includes('ACE') ||
+          rawNm.includes('SOL') ||
+          rawNm.includes('RISE')
+        ) {
+          mkt = 'ETF';
+        } else if (data.stockExchangeType?.name === 'KOSDAQ') {
+          mkt = 'KOSDAQ';
+        }
+
+        const result: RealQuote = {
           ticker,
           name: data.stockName || stockName,
           price,
@@ -135,8 +161,10 @@ export async function getRealQuote(ticker: string): Promise<RealQuote> {
           high,
           low,
           volume,
-          market: data.stockExchangeType?.name || 'KOSPI',
+          market: mkt,
         };
+        QUOTE_CACHE[ticker] = { time: Date.now(), data: result };
+        return result;
       }
     }
   } catch (err) {

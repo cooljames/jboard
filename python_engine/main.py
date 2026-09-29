@@ -1,5 +1,8 @@
 import asyncio
+import os
+import json
 from contextlib import asynccontextmanager
+import httpx
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -48,6 +51,14 @@ async def market_evaluation_loop():
                 await _run_single_evaluation_cycle(watchlist)
         except TokenRateLimited as e:
             logger.warning(f"[Trading Loop] Token rate-limited, waiting for next cycle: {e}")
+        except (httpx.TimeoutException, httpx.ReadTimeout, httpx.ConnectTimeout) as e:
+            logger.warning(f"[Trading Loop 방지책] KIS API 통신 지연/타임아웃 감지 ({type(e).__name__}). 포지션을 안전하게 유지하며 다음 평가 주기까지 대기합니다.")
+        except RuntimeError as e:
+            err_msg = str(e)
+            if "초당 거래건수" in err_msg or "EGW00201" in err_msg or "EGW00215" in err_msg or "Rate Limit" in err_msg:
+                logger.warning(f"[Trading Loop 방지책] KIS API 속도 제한 감지 ({err_msg}). 쿨다운 후 안전하게 다음 사이클을 진행합니다.")
+            else:
+                logger.error(f"[Trading Loop Error] {type(e).__name__}: {e}")
         except Exception as e:
             logger.error(f"[Trading Loop Error] {type(e).__name__}: {e}")
 
@@ -60,9 +71,19 @@ async def _run_single_evaluation_cycle(watchlist):
         return
 
     # Check account balance to monitor daily drawdowns and stop-losses
-    balance = await kis_client.get_balance()
+    try:
+        balance = await kis_client.get_balance()
+    except Exception as e:
+        logger.warning(f"[Trading Loop 방지책] 잔고 동기화 일시 대기 ({type(e).__name__}: {e}). 안전을 위해 이번 사이클 진입을 건너뜁니다.")
+        return
+
+    if balance.total_asset <= 0 and not settings.kis_is_paper_trading:
+        logger.warning("[Trading Loop 방지책] 계좌 자산 정보가 유효하지 않아 신규 주문을 보류합니다.")
+        return
+
     risk_manager.set_start_asset(balance.total_asset)
     risk_manager.check_circuit_breaker(balance.total_asset)
+
 
     # Evaluate risk on open positions
     # 데이트레이딩 활성 시: 타이트한 당일 손절/익절/트레일링 파라미터로 청산 감시
@@ -292,6 +313,52 @@ async def run_ai_analysis(req: AiAnalysisRequest):
 async def get_market_quote(ticker: str):
     quote = await market_data_collector.get_market_data_for_ticker(ticker)
     return quote
+
+@app.get("/api/market/search")
+async def search_market(q: str = "", market: str = "ALL"):
+    """전체 한국거래소(KRX) 상장 종목 및 ETF/ETN 검색 (FinanceDataReader / Master 연동)"""
+    q_clean = q.strip().lower()
+    if not q_clean:
+        return {"results": []}
+
+    master_path = os.path.join(os.path.dirname(__file__), "..", "src", "lib", "krx-securities-master.json")
+    items = []
+    if os.path.exists(master_path):
+        try:
+            with open(master_path, "r", encoding="utf-8") as f:
+                items = json.load(f)
+        except Exception:
+            pass
+
+    if not items:
+        try:
+            import FinanceDataReader as fdr
+            df = fdr.StockListing("KRX")
+            for _, r in df.iterrows():
+                m = str(r.get("Market", "")).upper()
+                items.append({
+                    "ticker": str(r["Code"]).zfill(6),
+                    "name": str(r["Name"]),
+                    "market": "KOSDAQ" if "KOSDAQ" in m else "KOSPI",
+                    "sector": str(r.get("Dept", ""))
+                })
+        except Exception as e:
+            logger.error(f"[Market Search] FDR fallback error: {e}")
+
+    matches = []
+    for s in items:
+        m_type = s.get("market", "")
+        if market != "ALL" and m_type != market:
+            continue
+        ticker = s.get("ticker", "").lower()
+        name = s.get("name", "").lower()
+        sector = (s.get("sector") or "").lower()
+        underlying = (s.get("underlying") or "").lower()
+
+        if q_clean in ticker or q_clean in name or q_clean in sector or q_clean in underlying:
+            matches.append(s)
+
+    return {"results": matches[:25]}
 
 @app.post("/api/cron/trigger")
 async def trigger_cron_cycle():

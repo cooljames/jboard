@@ -144,6 +144,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
         onOpenPanicModal={() => setPanicModalOpen(true)}
         theme={theme}
         onToggleTheme={handleToggleTheme}
+        userRole={authUser?.role || 'guest'}
       />
 
       {/* ══ 2. Right Main View (Expands / Merges into full screen) ══ */}

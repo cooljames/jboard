@@ -9,6 +9,11 @@ def get_logger(name: str = "quant_kis") -> logging.Logger:
             fmt="%(asctime)s [%(levelname)s] [%(name)s]: %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S"
         )
+        if hasattr(sys.stdout, "reconfigure"):
+            try:
+                sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+            except Exception:
+                pass
         ch = logging.StreamHandler(sys.stdout)
         ch.setFormatter(formatter)
         logger.addHandler(ch)

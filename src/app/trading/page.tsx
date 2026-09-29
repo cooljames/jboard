@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { TradingViewChart } from '@/components/chart/tradingview-chart';
 import { PositionTable, PositionItem } from '@/components/dashboard/position-table';
 import { ExecutionLog, OrderItem } from '@/components/dashboard/execution-log';
@@ -23,26 +23,50 @@ import {
 } from 'lucide-react';
 import { formatKRW, formatPct, formatNumber } from '@/lib/utils';
 import { fetchJson } from '@/lib/fetch-json';
+import { POPULAR_BY_MARKET, MarketType, MarketSecurity } from '@/lib/stock-universe';
 
-const POPULAR_STOCKS = [
-  { ticker: '005930', name: '삼성전자' },
-  { ticker: '000660', name: 'SK하이닉스' },
-  { ticker: '373220', name: 'LG에너지솔루션' },
-  { ticker: '005380', name: '현대차' },
-  { ticker: '035420', name: 'NAVER' },
-  { ticker: '035720', name: '카카오' },
-  { ticker: '068270', name: '셀트리온' },
-  { ticker: '247540', name: '에코프로비엠' },
-];
+const getMarketBadge = (market?: string) => {
+  switch (market?.toUpperCase()) {
+    case 'KOSPI':
+      return {
+        badge: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
+        text: '코스피',
+      };
+    case 'KOSDAQ':
+      return {
+        badge: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+        text: '코스닥',
+      };
+    case 'ETF':
+      return {
+        badge: 'bg-purple-500/15 text-purple-300 border-purple-500/30',
+        text: 'ETF',
+      };
+    case 'ETN':
+      return {
+        badge: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+        text: 'ETN',
+      };
+    default:
+      return {
+        badge: 'bg-slate-800 text-slate-300 border-slate-700',
+        text: market || 'KOSPI',
+      };
+  }
+};
 
 export default function UnifiedTradingPage() {
   // ── Stock Selection & Chart State ──
+  const [selectedMarketTab, setSelectedMarketTab] = useState<MarketType | 'ALL'>('ALL');
+  const [selectedMarketType, setSelectedMarketType] = useState<MarketType>('KOSPI');
   const [query, setQuery] = useState('삼성전자');
   const [selectedTicker, setSelectedTicker] = useState('005930');
   const [selectedName, setSelectedName] = useState('삼성전자');
   const [candles, setCandles] = useState<any[]>([]);
   const [quote, setQuote] = useState<any>(null);
   const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
   const [loadingChart, setLoadingChart] = useState(false);
 
   // ── AI Multimodal Diagnosis State ──
@@ -72,6 +96,9 @@ export default function UnifiedTradingPage() {
       if (data.quote) {
         setQuote(data.quote);
         setPrice(data.quote.price?.toString() || '0');
+        if (data.quote.market) {
+          setSelectedMarketType(data.quote.market as MarketType);
+        }
       }
       if (data.name) setSelectedName(data.name);
     } catch (e) {
@@ -105,28 +132,66 @@ export default function UnifiedTradingPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Search autocomplete handler
-  const handleSearch = async (val: string) => {
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  // ESC 키로 검색창 닫기
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSearchResults([]);
+        setHasSearched(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // 외부 클릭 시 검색창 닫기 (배경 화면은 그대로 유지)
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setSearchResults([]);
+        setHasSearched(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Search autocomplete handler with Market Category filtering
+  const handleSearch = async (val: string, mTab: MarketType | 'ALL' = selectedMarketTab) => {
     setQuery(val);
     if (!val.trim()) {
       setSearchResults([]);
+      setHasSearched(false);
       return;
     }
+    setIsSearching(true);
+    setHasSearched(true);
     try {
-      const res = await fetch(`/api/market?type=search&q=${encodeURIComponent(val)}`);
+      const marketParam = mTab !== 'ALL' ? `&market=${mTab}` : '';
+      const res = await fetch(`/api/market?type=search&q=${encodeURIComponent(val)}${marketParam}`);
       if (res.ok) {
         const data = await res.json();
         setSearchResults(data.results || []);
       }
-    } catch (_) {}
+    } catch (_) {
+    } finally {
+      setIsSearching(false);
+    }
   };
 
-  const handleSelectStock = (stock: { ticker: string; name: string }) => {
+  const handleSelectStock = (stock: { ticker: string; name: string; market?: string }) => {
     setSelectedTicker(stock.ticker);
     setSelectedName(stock.name);
+    if (stock.market) {
+      setSelectedMarketType(stock.market as MarketType);
+    }
     setSearchResults([]);
+    setHasSearched(false);
     setQuery(`${stock.name} (${stock.ticker})`);
   };
+
 
   // Run Gemini AI Multimodal Analysis
   const handleRunAiAnalysis = async () => {
@@ -228,61 +293,199 @@ export default function UnifiedTradingPage() {
   return (
     <div className="space-y-5 animate-in fade-in duration-200">
       {/* ══ 1. Top Search & Stock Selector Bar ══ */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 shadow-sm backdrop-blur-md">
+      <div
+        className="relative z-50 rounded-2xl border border-slate-700 bg-[#0c1220] p-4 shadow-xl"
+        style={{ backgroundColor: '#0c1220', opacity: 1 }}
+      >
+        {/* Market Category Selector Tabs (코스피 / 코스닥 / ETF / ETN) */}
+        <div className="flex items-center gap-1.5 pb-3 border-b border-slate-800 mb-3 overflow-x-auto scrollbar-none">
+          <span className="text-[11px] font-semibold text-slate-400 me-1 hidden sm:inline">시장 분류:</span>
+          {([
+            { id: 'ALL', label: '🌐 전체', desc: '전체 종목' },
+            { id: 'KOSPI', label: '🏢 코스피', desc: 'KOSPI 대형주' },
+            { id: 'KOSDAQ', label: '🚀 코스닥', desc: 'KOSDAQ 성장주' },
+            { id: 'ETF', label: '📊 ETF', desc: '지수·섹터·글로벌' },
+            { id: 'ETN', label: '⚡ ETN', desc: '원유·원자재·레버리지2X' },
+          ] as const).map((tab) => {
+            const isActive = selectedMarketTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => {
+                  setSelectedMarketTab(tab.id);
+                  if (query.trim() && !query.includes('(')) {
+                    handleSearch(query, tab.id);
+                  }
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap border flex items-center gap-1 ${
+                  isActive
+                    ? 'bg-blue-600 border-blue-500 text-white shadow-md shadow-blue-600/30'
+                    : 'bg-slate-800/80 hover:bg-slate-750 text-slate-400 hover:text-slate-200 border-slate-700/60'
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span className={`text-[10px] hidden md:inline font-normal ${isActive ? 'text-blue-200' : 'text-slate-500'}`}>
+                  ({tab.desc})
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          {/* Search Autocomplete Input */}
-          <div className="relative flex-1 max-w-md">
+          {/* Search Autocomplete Input Container */}
+          <div ref={searchContainerRef} className="relative flex-1 max-w-lg z-50">
             <div className="relative flex items-center">
               <Search className="absolute left-3.5 w-4 h-4 text-slate-400 pointer-events-none" />
               <input
                 type="text"
                 value={query}
                 onChange={(e) => handleSearch(e.target.value)}
-                placeholder="종목명 또는 종목코드 6자리 검색 (예: 005930, 카카오)"
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-950 border border-slate-700/80 text-white placeholder:text-slate-500 text-sm focus:outline-none focus:border-blue-500 font-medium transition-all"
+                placeholder={
+                  selectedMarketTab === 'ALL'
+                    ? '코스피, 코스닥, ETF, ETN 종목명 또는 6자리 코드 검색 (예: HK이노엔, 삼성전자, KODEX 200)'
+                    : selectedMarketTab === 'ETF'
+                    ? 'ETF 검색 (예: KODEX 200, 나스닥100, S&P500, 인버스, 069500)'
+                    : selectedMarketTab === 'ETN'
+                    ? 'ETN 검색 (예: WTI원유, 천연가스, 금, 은, 레버리지, 530063)'
+                    : selectedMarketTab === 'KOSDAQ'
+                    ? '코스닥 종목 검색 (예: HK이노엔, 알테오젠, 에코프로비엠, 195940)'
+                    : '코스피 종목 검색 (예: 삼성전자, SK하이닉스, 현대차, 005930)'
+                }
+                style={{ backgroundColor: '#070b14', opacity: 1 }}
+                className="w-full pl-10 pr-9 py-2.5 rounded-xl bg-[#070b14] border border-slate-600 text-white placeholder:text-slate-500 text-xs focus:outline-none focus:border-blue-500 font-medium transition-all"
               />
+              {query && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuery('');
+                    setSearchResults([]);
+                    setHasSearched(false);
+                  }}
+                  className="absolute right-3 p-1 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer text-[11px]"
+                  title="검색어 지우기"
+                >
+                  ✕
+                </button>
+              )}
             </div>
 
-            {/* Autocomplete Dropdown */}
-            {searchResults.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1.5 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-50 overflow-hidden divide-y divide-slate-800/80 max-h-64 overflow-y-auto">
-                {searchResults.map((stock) => (
-                  <button
-                    key={stock.ticker}
-                    type="button"
-                    onClick={() => handleSelectStock(stock)}
-                    className="w-full px-4 py-2.5 text-left hover:bg-blue-600/20 flex items-center justify-between text-xs transition-colors cursor-pointer"
+            {/* Autocomplete Dropdown - 검색창의 배경만 100% 완전 불투명 (Solid Opaque), 뒷배경 화면은 그대로 정상 유지 */}
+            {(searchResults.length > 0 || (hasSearched && query.trim() && !query.includes('('))) && (
+              <div
+                className="absolute top-full left-0 right-0 sm:min-w-[540px] mt-2 bg-[#0d1527] border-2 border-slate-600 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.9)] z-50 overflow-hidden divide-y divide-slate-800 max-h-96 overflow-y-auto"
+                style={{ backgroundColor: '#0d1527', opacity: 1 }}
+              >
+                <div
+                  className="px-4 py-3 bg-[#080d19] flex items-center justify-between text-xs text-slate-300 font-medium border-b border-slate-800 sticky top-0 z-10"
+                  style={{ backgroundColor: '#080d19', opacity: 1 }}
+                >
+                  <span className="flex items-center gap-2 text-blue-400 font-bold text-xs">
+                    <Search className="w-4 h-4" />
+                    {isSearching
+                      ? '종목 검색 중...'
+                      : `검색 결과 (${searchResults.length}건)`}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-slate-400 hidden sm:inline">선택 시 차트·호가 즉시 동기화</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchResults([]);
+                        setHasSearched(false);
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[11px] font-semibold transition-colors cursor-pointer"
+                    >
+                      ✕ 닫기 (ESC)
+                    </button>
+                  </div>
+                </div>
+
+                {isSearching ? (
+                  <div
+                    className="px-6 py-8 text-center text-xs text-slate-400 flex items-center justify-center gap-2 bg-[#0d1527]"
+                    style={{ backgroundColor: '#0d1527', opacity: 1 }}
                   >
-                    <div>
-                      <span className="font-bold text-white text-sm">{stock.name}</span>
-                      <span className="font-mono text-slate-400 ms-2">{stock.ticker}</span>
-                    </div>
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-semibold">
-                      {stock.market || 'KOSPI'}
-                    </span>
-                  </button>
-                ))}
+                    <RefreshCw className="w-4 h-4 animate-spin text-blue-400" />
+                    <span>실시간 시장 전수 데이터 검색 중...</span>
+                  </div>
+                ) : searchResults.length === 0 ? (
+                  <div
+                    className="px-6 py-8 text-center text-xs text-slate-400 bg-[#0d1527]"
+                    style={{ backgroundColor: '#0d1527', opacity: 1 }}
+                  >
+                    <p className="font-semibold text-slate-300">검색된 종목이 없습니다.</p>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      코스피, 코스닥, ETF, ETN 6자리 종목코드 또는 종목명을 확인해주세요.
+                    </p>
+                  </div>
+                ) : (
+                  searchResults.map((stock) => {
+                    const badge = getMarketBadge(stock.market);
+                    return (
+                      <button
+                        key={stock.ticker}
+                        type="button"
+                        onClick={() => handleSelectStock(stock)}
+                        className="w-full px-4 py-3 text-left bg-[#0d1527] hover:bg-[#1a253c] flex items-center justify-between text-xs transition-colors cursor-pointer group"
+                        style={{ backgroundColor: '#0d1527', opacity: 1 }}
+                      >
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-white text-sm group-hover:text-blue-400 transition-colors">
+                              {stock.name}
+                            </span>
+                            <span className="font-mono text-slate-300 text-xs bg-[#151f35] px-1.5 py-0.5 rounded border border-slate-700">
+                              {stock.ticker}
+                            </span>
+                          </div>
+                          {(stock.sector || stock.underlying) && (
+                            <div className="text-[11px] text-slate-400 mt-0.5 font-normal">
+                              {stock.sector ? `섹터: ${stock.sector}` : stock.underlying}
+                            </div>
+                          )}
+                        </div>
+                        <span className={`text-[10px] px-2.5 py-0.5 rounded-md font-bold border tracking-wider shrink-0 ${badge.badge}`}>
+                          {badge.text}
+                        </span>
+                      </button>
+                    );
+                  })
+                )}
               </div>
             )}
           </div>
 
           {/* Popular Stock Quick Select Pills */}
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-xs text-slate-400 font-medium me-1 hidden sm:inline">주요 종목:</span>
-            {POPULAR_STOCKS.map((s) => (
-              <button
-                key={s.ticker}
-                type="button"
-                onClick={() => handleSelectStock(s)}
-                className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                  selectedTicker === s.ticker
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
-                    : 'bg-slate-800/80 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700/60'
-                }`}
-              >
-                {s.name}
-              </button>
-            ))}
+            <span className="text-xs text-slate-400 font-medium me-1 hidden sm:inline">
+              {selectedMarketTab === 'ALL' ? '인기 자산:' : `${selectedMarketTab} 추천:`}
+            </span>
+            {(POPULAR_BY_MARKET[selectedMarketTab] || []).map((s) => {
+              const isSelected = selectedTicker === s.ticker;
+              const badge = getMarketBadge(s.market);
+              return (
+                <button
+                  key={s.ticker}
+                  type="button"
+                  onClick={() => handleSelectStock(s)}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
+                    isSelected
+                      ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
+                      : 'bg-slate-800/80 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700/60'
+                  }`}
+                >
+                  <span>{s.name}</span>
+                  {selectedMarketTab === 'ALL' && (
+                    <span className={`text-[9px] px-1 py-0.2 rounded font-semibold border ${badge.badge}`}>
+                      {badge.text}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -292,6 +495,9 @@ export default function UnifiedTradingPage() {
             <div className="flex items-baseline gap-2">
               <span className="text-lg font-extrabold text-white tracking-tight">{selectedName}</span>
               <span className="font-mono text-slate-400 font-semibold text-xs">{selectedTicker}</span>
+              <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold border tracking-wider ${getMarketBadge(selectedMarketType).badge}`}>
+                {getMarketBadge(selectedMarketType).text}
+              </span>
             </div>
             <div className="flex items-baseline gap-2">
               <span className="text-xl font-bold font-mono text-white">
@@ -473,11 +679,16 @@ export default function UnifiedTradingPage() {
               {/* Target Stock Display */}
               <div>
                 <label className="block text-[11px] font-medium text-slate-400 mb-1">
-                  주문 대상 종목
+                  주문 대상 자산 (코스피 · 코스닥 · ETF · ETN)
                 </label>
                 <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between text-xs font-semibold text-white">
-                  <span>{selectedName}</span>
-                  <span className="font-mono text-slate-400">{selectedTicker}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold">{selectedName}</span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded font-bold border tracking-wider ${getMarketBadge(selectedMarketType).badge}`}>
+                      {getMarketBadge(selectedMarketType).text}
+                    </span>
+                  </div>
+                  <span className="font-mono text-slate-400 text-xs">{selectedTicker}</span>
                 </div>
               </div>
 

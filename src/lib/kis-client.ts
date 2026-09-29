@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { getRealQuote } from './real-market';
+import { getRealQuote, STOCK_NAME_MAP } from './real-market';
 
 export interface KisConfig {
   appKey: string;
@@ -45,6 +45,16 @@ class KisClient {
   private tokenExpiresAt: number = 0;
   private pendingTokenPromise: Promise<string> | null = null;
   private nextAllowedTokenRequestTime: number = 0;
+
+  // In-memory Balance Cache & Safeguard (10s TTL)
+  private cachedBalance: KisAccountBalance | null = null;
+  private cachedBalanceTime: number = 0;
+  private readonly BALANCE_CACHE_TTL_MS = 10000;
+
+  public invalidateBalanceCache() {
+    this.cachedBalanceTime = 0;
+  }
+
 
   private getDiskCachedToken(): { token: string; expiresAt: number } | null {
     try {
@@ -252,35 +262,19 @@ class KisClient {
     volume: number;
     per?: number;
     pbr?: number;
+    market?: string;
   }> {
     if (!this.isConfigured()) {
-      // Mock Fallback for common tickers
-      const mockPrices: Record<string, { name: string; price: number; changeRate: number; volume: number }> = {
-        '005930': { name: '삼성전자', price: 61500, changeRate: 1.48, volume: 14205000 },
-        '000660': { name: 'SK하이닉스', price: 184500, changeRate: -0.81, volume: 3820000 },
-        '035420': { name: 'NAVER', price: 172000, changeRate: 2.14, volume: 980000 },
-        '035720': { name: '카카오', price: 38900, changeRate: 0.52, volume: 1450000 },
-        '005380': { name: '현대차', price: 234000, changeRate: -1.26, volume: 840000 },
-        '068270': { name: '셀트리온', price: 189000, changeRate: 0.80, volume: 620000 },
-        '105560': { name: 'KB금융', price: 89400, changeRate: 1.82, volume: 1200000 },
-        '051910': { name: 'LG화학', price: 325000, changeRate: -0.45, volume: 310000 },
-      };
-
-      const mock = mockPrices[ticker] || {
-        name: `종목-${ticker}`,
-        price: 50000,
-        changeRate: 0.5,
-        volume: 500000,
-      };
-
+      const real = await getRealQuote(ticker);
       return {
         ticker,
-        name: mock.name,
-        price: mock.price,
-        changeRate: mock.changeRate,
-        volume: mock.volume,
+        name: real.name,
+        price: real.price,
+        changeRate: real.changeRate,
+        volume: real.volume,
         per: 11.2,
         pbr: 0.95,
+        market: real.market,
       };
     }
 
@@ -295,6 +289,7 @@ class KisClient {
         volume: real.volume,
         per: 11.2,
         pbr: 0.95,
+        market: real.market,
       };
     }
 
@@ -324,18 +319,42 @@ class KisClient {
           volume: real.volume,
           per: 11.2,
           pbr: 0.95,
+          market: real.market,
         };
       }
 
       const output = data.output;
+      const parsedPrice = parseFloat(output.stck_prpr || '0');
+      if (parsedPrice <= 0) {
+        const real = await getRealQuote(ticker);
+        if (real && real.price > 0) {
+          return {
+            ticker,
+            name: real.name || STOCK_NAME_MAP[ticker] || output.hts_kor_isnm || `종목-${ticker}`,
+            price: real.price,
+            changeRate: real.changeRate,
+            volume: real.volume,
+            per: 11.2,
+            pbr: 0.95,
+            market: real.market,
+          };
+        }
+      }
+
+      let detectedMarket = 'KOSPI';
+      const nm = (STOCK_NAME_MAP[ticker] || output.hts_kor_isnm || '').toUpperCase();
+      if (ticker.startsWith('5') || nm.includes('ETN')) detectedMarket = 'ETN';
+      else if (nm.includes('ETF') || nm.includes('KODEX') || nm.includes('TIGER') || nm.includes('ACE') || nm.includes('SOL') || nm.includes('RISE')) detectedMarket = 'ETF';
+
       return {
         ticker,
-        name: output.rprs_mrkt_kor_name || output.hts_kor_isnm || `종목-${ticker}`,
-        price: parseFloat(output.stck_prpr || '0'),
+        name: STOCK_NAME_MAP[ticker] || output.hts_kor_isnm || `종목-${ticker}`,
+        price: parsedPrice,
         changeRate: parseFloat(output.prdy_ctrt || '0'),
         volume: parseInt(output.acml_vol || '0', 10),
         per: parseFloat(output.per || '0'),
         pbr: parseFloat(output.pbr || '0'),
+        market: detectedMarket,
       };
     } catch {
       const real = await getRealQuote(ticker);
@@ -347,6 +366,7 @@ class KisClient {
         volume: real.volume,
         per: 11.2,
         pbr: 0.95,
+        market: real.market,
       };
     }
   }
@@ -415,6 +435,8 @@ class KisClient {
       throw new Error(`KIS Order failed: [${data.msg_cd}] ${data.msg1 || res.statusText}`);
     }
 
+    this.invalidateBalanceCache();
+
     return {
       orderNo: data.output?.ODNO || `ORD-${Date.now().toString().slice(-6)}`,
       success: true,
@@ -424,6 +446,11 @@ class KisClient {
 
   /**
    * Inquire Account Balance & Positions
+   * [미연 방지책 핵심 설계]:
+   * 1. 10초 TTL 인메모리 캐싱: 대시보드와 트레이딩 루프의 중복 호출 흡수
+   * 2. Python Worker(/api/balance) 우선 연동: 단일 프로세스 캐시 공유로 KIS 다중 조회 방지
+   * 3. KIS 직접 조회 시 페이지네이션 간 1.1초 간격 강제 (EGW00201/EGW00215 사전 차단)
+   * 4. 실패 시 캐시 스냅샷 폴백으로 UI 무중단 보장
    */
   async getAccountBalance(): Promise<KisAccountBalance> {
     if (!this.isConfigured()) {
@@ -437,9 +464,47 @@ class KisClient {
       };
     }
 
+    const now = Date.now();
+    if (this.cachedBalance && (now - this.cachedBalanceTime) < this.BALANCE_CACHE_TTL_MS) {
+      return this.cachedBalance;
+    }
+
+    // 1순위: 로컬 파이썬 엔진(/api/balance)의 통합 캐시 조회 (중복 조회 원천 차단)
+    try {
+      const workerUrl = process.env.PYTHON_WORKER_URL || 'http://127.0.0.1:8000';
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 1500);
+      const wRes = await fetch(`${workerUrl}/api/balance`, { signal: ctrl.signal });
+      clearTimeout(timer);
+      if (wRes.ok) {
+        const wb = await wRes.json();
+        if (wb && typeof wb.total_asset === 'number') {
+          const mapped: KisAccountBalance = {
+            totalAsset: wb.total_asset,
+            cashBalance: wb.cash_balance,
+            stockValuation: wb.stock_valuation,
+            dailyPnl: wb.daily_pnl,
+            unsettledAmount: wb.unsettled_amount || 0,
+            positions: (wb.positions || []).map((p: any) => ({
+              ticker: p.ticker,
+              tickerName: p.ticker_name,
+              quantity: p.quantity,
+              avgBuyPrice: p.avg_buy_price,
+              currentPrice: p.current_price,
+              unrealizedPnl: p.unrealized_pnl,
+              returnPct: p.return_pct,
+            })),
+          };
+          this.cachedBalance = mapped;
+          this.cachedBalanceTime = Date.now();
+          return mapped;
+        }
+      }
+    } catch {}
+
     const token = await this.getAccessToken();
     if (!token || token === 'MOCK_KIS_TOKEN') {
-      return this.getMockBalance();
+      return this.cachedBalance || this.getMockBalance();
     }
     const isPaper = this.config.isPaperTrading;
     const trId = isPaper ? 'VTTC8434R' : 'TTTC8434R';
@@ -451,6 +516,11 @@ class KisClient {
       const allOutput1: any[] = [];
       let output2: any = {};
       for (let page = 0; page < 10; page++) {
+        if (page > 0) {
+          // KIS 원장 초당 거래건수(EGW00201/EGW00215) 초과 사전 차단
+          await new Promise((r) => setTimeout(r, 1100));
+        }
+
         const url = new URL(`${this.config.restBaseUrl}/uapi/domestic-stock/v1/trading/inquire-balance`);
         url.searchParams.append('CANO', this.config.accountNo);
         url.searchParams.append('ACNT_PRDT_CD', this.config.accountPrdtCd);
@@ -476,8 +546,8 @@ class KisClient {
 
         const data = await res.json();
         if (!res.ok || data.rt_cd !== '0') {
-          console.warn(`[KIS Balance Check] API returned non-zero response: [${data.msg_cd}] ${data.msg1 || res.statusText}. Using fallback.`);
-          return this.getMockBalance();
+          console.warn(`[KIS Balance Check 방지책] KIS 응답 한도/상태 감지: [${data.msg_cd}] ${data.msg1 || res.statusText}. 캐시 잔고로 안전 폴백.`);
+          return this.cachedBalance || this.getMockBalance();
         }
 
         const pageOutput1 = Array.isArray(data.output1) ? data.output1 : [];
@@ -516,7 +586,7 @@ class KisClient {
         }))
         .filter((p) => p.ticker && p.quantity > 0);
 
-      return {
+      const finalBal: KisAccountBalance = {
         totalAsset: toNum(output2.tot_evlu_amt),
         cashBalance: toNum(output2.dnca_tot_amt),
         stockValuation: toNum(output2.scts_evlu_amt),
@@ -524,9 +594,13 @@ class KisClient {
         unsettledAmount: toNum(output2.prvs_rcdl_excc_amt),
         positions,
       };
+
+      this.cachedBalance = finalBal;
+      this.cachedBalanceTime = Date.now();
+      return finalBal;
     } catch (e: any) {
-      console.warn(`[KIS Balance Check] Request error: ${e.message}. Using fallback.`);
-      return this.getMockBalance();
+      console.warn(`[KIS Balance Check 방지책] 요청 중 예외 발생 (${e.message}). 캐시 잔고로 안전 폴백.`);
+      return this.cachedBalance || this.getMockBalance();
     }
   }
 
