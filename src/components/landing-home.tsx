@@ -157,8 +157,8 @@ export function LandingHome({ authUser, onGoToDashboard }: LandingHomeProps) {
             <span>Jquant ver 1.0 · KIS 20 TPS &amp; 7대 전략 가동 중</span>
           </div>
 
-          {/* Main Title */}
-          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold text-white tracking-tight leading-tight sm:leading-tight">
+          {/* Main Title (기존 대비 4/5 크기로 축소: 60px->48px, 48px->38px, 30px->24px) */}
+          <h1 className="text-2xl sm:text-4xl lg:text-5xl font-extrabold text-white tracking-tight leading-tight sm:leading-tight">
             스마트 알고리즘 <span className="bg-gradient-to-r from-blue-400 via-indigo-300 to-cyan-400 bg-clip-text text-transparent">퀀트 트레이딩</span> 플랫폼
           </h1>
 
