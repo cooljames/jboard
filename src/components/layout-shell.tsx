@@ -24,8 +24,8 @@ import {
 
 
 const PAGE_TITLES: Record<string, { title: string; subtitle: string }> = {
-  '/': { title: 'Jquant ver 1.0 (홈 & 컨트롤 타워)', subtitle: '동적 퀀트 트레이딩 & AI 분석 통합 플랫폼' },
-  '/home': { title: 'Jquant ver 1.0 (서비스 소개)', subtitle: '동적 퀀트 트레이딩 & AI 분석 통합 플랫폼' },
+  '/': { title: '스마트 알고리즘 퀀트 트레이딩 플랫폼', subtitle: '한국투자증권(KIS) 실시간 연동 & Gemini AI 퀀트 분석' },
+  '/home': { title: '스마트 알고리즘 퀀트 트레이딩 플랫폼', subtitle: '한국투자증권(KIS) 실시간 연동 & Gemini AI 퀀트 분석' },
   '/strategies': { title: '동적 퀀트 전략 컨트롤러', subtitle: '무중단 알고리즘 ON/OFF 및 가중치 동적 튜닝' },
   '/search': { title: '실시간 검색 & 주문 체결', subtitle: '종목 실시간 발굴, TradingView 차트, Gemini AI 분석 및 KIS 수동 주문 체결' },
   '/trading': { title: '실시간 검색 & 주문 체결', subtitle: '종목 실시간 발굴, TradingView 차트, Gemini AI 분석 및 KIS 수동 주문 체결' },
@@ -136,51 +136,73 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
     subtitle: 'Dynamic Quant Trading & AI Analytics Platform',
   };
 
+  // 랜딩 페이지(/home 또는 비로그인 상태의 홈 /)에서는 좌측 사이드바 메뉴 완전 숨김
+  const hideSidebar = pathname === '/home' || (pathname === '/' && (!authUser || authUser.role === 'guest'));
+
   return (
     <div className="min-h-screen flex bg-[#090d16] text-slate-100 antialiased selection:bg-blue-600 selection:text-white transition-colors duration-200">
-      {/* ══ 1. Left Sidebar (Collapsible / Merged) ══ */}
-      <Sidebar
-        isMerged={isMerged}
-        onToggleMerge={handleToggleMerge}
-        onOpenPanicModal={() => setPanicModalOpen(true)}
-        theme={theme}
-        onToggleTheme={handleToggleTheme}
-        userRole={authUser?.role || 'guest'}
-      />
+      {/* ══ 1. Left Sidebar (랜딩 페이지에서는 좌측 메뉴 숨김) ══ */}
+      {!hideSidebar && (
+        <Sidebar
+          isMerged={isMerged}
+          onToggleMerge={handleToggleMerge}
+          onOpenPanicModal={() => setPanicModalOpen(true)}
+          theme={theme}
+          onToggleTheme={handleToggleTheme}
+          userRole={authUser?.role || 'guest'}
+        />
+      )}
 
       {/* ══ 2. Right Main View (Expands / Merges into full screen) ══ */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top Header */}
         <header className="sticky top-0 z-30 h-16 border-b border-slate-800 bg-slate-950/80 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
-            {/* 사이드바 열기/닫기 토글 버튼 */}
-            <button
-              onClick={handleToggleMerge}
-              title="사이드바 열기/닫기"
-              style={{
-                background: 'rgba(255, 255, 255, 0.92)',
-                border: '1px solid rgba(255, 255, 255, 0.4)',
-                borderRadius: '8px',
-                padding: '4px 8px',
-                cursor: 'pointer',
-                color: 'rgb(0, 100, 0)',
-                fontSize: '1rem',
-                display: 'inline-flex',
-                alignItems: 'center',
-              }}
-            >
-              <i className={`bi ${isMerged ? 'bi-layout-sidebar' : 'bi-layout-sidebar-inset'}`} />
-            </button>
+            {!hideSidebar ? (
+              <>
+                {/* 사이드바 열기/닫기 토글 버튼 */}
+                <button
+                  onClick={handleToggleMerge}
+                  title="사이드바 열기/닫기"
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.92)',
+                    border: '1px solid rgba(255, 255, 255, 0.4)',
+                    borderRadius: '8px',
+                    padding: '4px 8px',
+                    cursor: 'pointer',
+                    color: 'rgb(0, 100, 0)',
+                    fontSize: '1rem',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                  }}
+                >
+                  <i className={`bi ${isMerged ? 'bi-layout-sidebar' : 'bi-layout-sidebar-inset'}`} />
+                </button>
 
-            {/* Current Page Title */}
-            <div className="flex flex-col min-w-0">
-              <span className="text-sm font-bold text-white tracking-tight truncate">
-                {pageInfo.title}
-              </span>
-              <span className="text-[11px] text-slate-400 truncate hidden sm:inline">
-                {pageInfo.subtitle}
-              </span>
-            </div>
+                {/* Current Page Title */}
+                <div className="flex flex-col min-w-0">
+                  <span className="text-sm font-bold text-white tracking-tight truncate">
+                    {pageInfo.title}
+                  </span>
+                  <span className="text-[11px] text-slate-400 truncate hidden sm:inline">
+                    {pageInfo.subtitle}
+                  </span>
+                </div>
+              </>
+            ) : (
+              /* 랜딩 페이지 상단 헤더 브랜드 로고 */
+              <Link href="/" className="flex items-center gap-2.5 group">
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform">
+                  <Activity className="w-4 h-4 text-white" />
+                </div>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="font-extrabold text-white tracking-tight text-xl leading-none">
+                    J<span className="text-blue-500">quant</span>
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-mono tracking-wider">ver 1.0</span>
+                </div>
+              </Link>
+            )}
           </div>
 
           {/* Right Header Badges & Actions */}
@@ -239,13 +261,21 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
                 </button>
               </div>
             ) : (
-              <Link
-                href="/login"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white transition-all"
-              >
-                <LogIn className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">로그인</span>
-              </Link>
+              <div className="flex items-center gap-2">
+                <Link
+                  href="/login"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white transition-all shadow-md shadow-blue-600/20 cursor-pointer"
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span>로그인</span>
+                </Link>
+                <Link
+                  href="/signup"
+                  className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-all cursor-pointer"
+                >
+                  <span>회원가입</span>
+                </Link>
+              </div>
             )}
 
             {/* Quick Panic Button in Header */}
